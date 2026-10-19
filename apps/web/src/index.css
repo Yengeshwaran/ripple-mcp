@@ -1,0 +1,48 @@
+/* Shared palette and typography keep all Day 1 panels visually consistent. */
+:root {
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  color: #27352f;
+  background: #f7f8f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --page: #f7f8f5;
+  --surface: #fff;
+  --ink: #27352f;
+  --muted: #7c8881;
+  --teal: #5f927e;
+  --teal-dark: #477763;
+  --mint: #e8f1ed;
+  --line: #e8ebe6;
+  --line-soft: #eff1ed;
+  --display: 'DM Sans', 'Segoe UI', sans-serif;
+  --mono: 'Cascadia Code', Consolas, monospace;
+
+  font-optical-sizing: auto;
+  font-weight: 400;
+}
+
+/* Page-level defaults prevent browser spacing from affecting the dashboard grid. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(71, 119, 99, 0.35);
+  outline-offset: 2px;
+}

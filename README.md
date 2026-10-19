@@ -6,8 +6,19 @@ It is intended to process a team meeting recording, identify speaker turns, map 
 
 ## Current status
 
-This repository currently contains **initial scaffolding and documentation only**.
-Core application logic is not implemented yet.
+The MCP server is live on branch `feature/task-tools`.
+
+**Implemented MCP tools:**
+
+| Tool | Description |
+|---|---|
+| `ping` | Connectivity check — echo an optional message back |
+| `create_task` | Create a task (title required; description, assignee, deadline optional) |
+| `list_tasks` | List tasks with optional `status` and `assignee` filters |
+| `assign_task` | Assign (or re-assign) a task to a team member |
+
+**Database:** SQLite via Node.js built-in `node:sqlite` (Node ≥ 22.5.0).
+Development database: `data/ripple.db` (git-ignored).
 
 ## Monorepo structure
 
@@ -42,9 +53,31 @@ When installable packages are added:
 npm install
 ```
 
-## Development commands (scaffolding phase)
+## Development commands
 
-At this stage, runnable app commands are not available yet. This will be updated once app/service packages are added.
+```powershell
+# Install dependencies
+npm install
+
+# Start MCP server (port 3100)
+npm run mcp:dev
+
+# TypeScript type check
+npm run mcp:typecheck
+
+# Run automated tests
+npm test
+```
+
+MCP endpoint: `http://localhost:3100/mcp` (Streamable HTTP)
+Health endpoint: `http://localhost:3100/health`
+
+### Testing with MCP Inspector
+
+1. `npx @modelcontextprotocol/inspector`
+2. Connection type: **Streamable HTTP**
+3. URL: `http://localhost:3100/mcp`
+4. Connect → call `ping`, `create_task`, `list_tasks`, or `assign_task`
 
 ## Team guide
 

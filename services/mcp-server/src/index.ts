@@ -72,6 +72,12 @@ app.post("/mcp", async (req, res) => {
   }
 });
 
+// MCP endpoint — GET is not supported (no server-initiated SSE streams).
+// Return 405 so clients get a clear protocol error instead of Express's 404.
+app.get("/mcp", (_req, res) => {
+  res.set("Allow", "POST").status(405).end();
+});
+
 // Health check (plain HTTP, not MCP)
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", server: "ripple-mcp", version: "0.1.0" });

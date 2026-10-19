@@ -1,0 +1,37 @@
+{
+  "name": "ripple-mcp",
+  "version": "1.0.0",
+  "description": "Ripple is a **planned** voice-aware collaborative task assistant for hackathon use.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "mcp:dev": "tsx services/mcp-server/src/index.ts",
+    "mcp:typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yengeshwaran/ripple-mcp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Yengeshwaran/ripple-mcp/issues"
+  },
+  "homepage": "https://github.com/Yengeshwaran/ripple-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

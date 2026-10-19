@@ -63,3 +63,32 @@ Use this template to record actual Kiro Crew usage during the project.
   - MCP Inspector — manually verified `create_task`, `list_tasks`, `assign_task`, and `ping` via Streamable HTTP at `http://localhost:3100/mcp`
 - Results: TypeScript type checking clean. All 17 automated tests pass. Node built-in `node:sqlite` confirmed available on Node 24.19.0 — no extra dependencies required. Tests use an isolated temp database; `data/ripple.db` is never touched. Manual MCP Inspector verification confirmed: created a task, listed it, assigned it to another team member, and observed correct field values and status in all responses.
 - Follow-up actions: Review the final Git diff, commit to `feature/task-tools`, push the branch, open a PR against `main`, complete code review before merging. Coordinate `status` enum values (`open`, `in_progress`, `done`) with Member 2 before the React dashboard consumes task data.
+
+## Session 3 — Frontend MCP Integration
+
+- Date: 19 October 2026
+- Teammate: Member 2 (implementation assisted by Copilot; Kiro Crew was not used)
+- Branch: `feature/frontend-mcp-integration`
+- Goal: Connect the React dashboard to the SQLite-backed task tools using the official MCP TypeScript SDK and Streamable HTTP, while retaining the mock adapter as a fallback.
+- Files changed:
+  - `apps/web/package.json` and `apps/web/package-lock.json` (MCP SDK dependency)
+  - `apps/web/src/services/taskClient.ts` (actual MCP tool-call activity type)
+  - `apps/web/src/services/mcpTaskClient.ts` (new SDK client adapter for `create_task`, `list_tasks`, and `assign_task`)
+  - `apps/web/src/App.tsx` and `apps/web/src/App.css` (task creation, assignment, loading/errors, live tool activity, connection status)
+  - `apps/web/vite.config.ts` (development proxy for the Streamable HTTP `/mcp` endpoint)
+  - `apps/web/README.md` (MCP and mock-fallback run instructions)
+  - `KIRO_CREW_LOG.md` (this entry)
+- Prompts used (summary): Implement the frontend-to-MCP integration on a new branch from latest `main`; use `Client` with `StreamableHTTPClientTransport`, match the existing task tools and field contract, enable create/reassignment with validation and visible errors, retain mock fallback, verify create/list/reassign and persistence after backend restart, run checks, and open a PR without merging.
+- Diffs reviewed: Confirmed the adapter tool names and input keys against `services/mcp-server/src/tools/tasks.ts`, checked the task response contract against the SQLite layer, and verified the implementation diff is scoped to `apps/web/` plus this log. Team review is pending.
+- Tests/checks run:
+  - `npm run build` from `apps/web/` — passed.
+  - `npm test` — 17 tests passed, 0 failed.
+  - `npm run mcp:typecheck` — passed.
+  - `git diff --check` — passed.
+  - MCP health endpoint — HTTP 200.
+  - Streamable HTTP initialize through Vite's `/mcp` proxy — HTTP 200, protocol `2025-11-25`.
+  - Browser dashboard against the running backend — `list_tasks`, `create_task`, and `assign_task` all succeeded; created a task, listed it, reassigned it, and confirmed the resulting tool inputs/outputs in the activity panel.
+  - Restarted the backend with the same isolated temporary SQLite database and reloaded the dashboard — created task and new assignee remained present.
+  - Dashboard title validation — blank/whitespace title displayed `Task title is required.` without sending a create call.
+- Results: Frontend connects to the real MCP server over the SDK Streamable HTTP transport. Task create, list, assign, and persistence-after-restart were verified against SQLite. The in-memory `MockTaskClient` remains available when `VITE_USE_MOCK_TASK_CLIENT=true`; the MCP activity panel clearly indicates that mode and does not label mock calls as live. No backend files or `.kiro/` directory were added.
+- Follow-up actions: Review PR before merge. Browser logs show the SDK's optional `GET /mcp` SSE request receives HTTP 404 because the server currently exposes only `POST /mcp`; POST-based tool operations and persistence succeed. Backend owner should confirm/fix the unsupported-GET response (Streamable HTTP servers that do not offer GET streams should respond with 405) if needed.

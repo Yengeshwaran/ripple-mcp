@@ -17,6 +17,15 @@ export type CreateTaskInput = Pick<Task, 'title'> &
 
 export type TaskFilters = Partial<Pick<Task, 'status' | 'assignee'>>
 
+export type TaskToolCall = {
+  id: string
+  name: string
+  input: Record<string, unknown>
+  output: string
+  succeeded: boolean
+  calledAt: string
+}
+
 // UI components depend on this interface, not on a backend transport or mock store.
 export interface TaskClient {
   createTask(input: CreateTaskInput): Promise<Task>

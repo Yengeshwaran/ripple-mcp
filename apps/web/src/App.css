@@ -1,0 +1,280 @@
+/* Core layout */
+.app-shell {
+  min-height: 100vh;
+  background: var(--page);
+}
+
+.topbar {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px clamp(20px, 5vw, 72px);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--mint);
+  color: var(--teal-dark);
+  font-size: 11px;
+}
+
+.experience-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dashboard {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 28px clamp(20px, 5vw, 72px) 48px;
+}
+
+/* The three columns map to request input, saved commitments, and MCP activity. */
+.panel-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.1fr) minmax(280px, 1.1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.panel {
+  min-width: 0;
+  padding: 19px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.panel h1,
+.panel h2,
+.panel h3,
+.panel p {
+  margin-top: 0;
+}
+
+.panel h1,
+.panel h2 {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.panel p {
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Inputs are intentionally disabled until the separate interaction work is scheduled. */
+.request-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.request-panel textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.request-panel textarea::placeholder {
+  color: #9aa39d;
+}
+
+.request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.request-actions button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+}
+
+.request-actions .primary-button {
+  border-color: var(--teal-dark);
+  background: var(--teal-dark);
+  color: white;
+}
+
+.request-actions button:disabled,
+.request-panel textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.mock-note {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* Keep each commitment scannable: task, owner, deadline, and conflict status. */
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+}
+
+.panel-heading > span,
+.mock-badge {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.commitment-list,
+.tool-call-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.commitment,
+.tool-call {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.commitment {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.commitment h3,
+.tool-call h3 {
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.commitment p {
+  margin: 0;
+  font-size: 11px;
+}
+
+.conflict-badge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #fbe9e7;
+  color: #a13f37;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tool-call dl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.tool-call dl > div {
+  min-width: 0;
+}
+
+.tool-call dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tool-call dd {
+  margin: 0;
+}
+
+.tool-call code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #4c5c54;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* Preserve the same information hierarchy on tablet and phone widths. */
+@media (max-width: 960px) {
+  .panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .request-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    padding-inline: 18px;
+  }
+
+  .dashboard {
+    padding: 18px;
+  }
+
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .request-panel {
+    grid-column: auto;
+  }
+}

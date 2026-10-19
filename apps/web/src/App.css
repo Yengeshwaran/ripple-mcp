@@ -41,6 +41,29 @@
   font-size: 12px;
 }
 
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d19a52;
+}
+
+.status-dot--connected {
+  background: #478768;
+}
+
+.status-dot--error {
+  background: #b5483d;
+}
+
 .dashboard {
   width: min(1440px, 100%);
   margin: 0 auto;
@@ -85,21 +108,28 @@
   line-height: 1.5;
 }
 
-/* Inputs are intentionally disabled until the separate interaction work is scheduled. */
-.request-label {
-  display: block;
-  margin-bottom: 7px;
+/* The task form submits create_task-compatible fields through the selected adapter. */
+.task-form {
+  display: grid;
+  gap: 8px;
+}
+
+.task-form label {
+  margin-top: 3px;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
-.request-panel textarea {
+.task-form input,
+.task-form textarea,
+.assignment-form input {
   width: 100%;
   resize: vertical;
-  padding: 10px;
+  min-height: 35px;
+  padding: 8px 9px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: #fff;
   color: var(--ink);
   font: inherit;
@@ -107,45 +137,50 @@
   line-height: 1.5;
 }
 
-.request-panel textarea::placeholder {
+.task-form textarea {
+  min-height: 56px;
+}
+
+.task-form input::placeholder,
+.task-form textarea::placeholder,
+.assignment-form input::placeholder {
   color: #9aa39d;
 }
 
-.request-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.request-actions button {
+.task-form button,
+.assignment-form button {
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--teal-dark);
   border-radius: 7px;
-  background: #fff;
-  color: var(--muted);
-  font: inherit;
-  font-size: 11px;
-}
-
-.request-actions .primary-button {
-  border-color: var(--teal-dark);
   background: var(--teal-dark);
   color: white;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.request-actions button:disabled,
-.request-panel textarea:disabled {
-  cursor: not-allowed;
-  opacity: 0.72;
+.task-form button:disabled,
+.assignment-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
-.mock-note {
-  display: block;
-  margin-top: 12px;
+.form-error {
+  margin: 2px 0 0 !important;
+  color: #a13f37 !important;
+  font-size: 11px !important;
+}
+
+.task-state {
+  padding: 10px 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
+}
+
+.task-state--error {
+  color: #a13f37;
 }
 
 /* Keep each commitment scannable: task, owner, deadline, and conflict status. */
@@ -205,6 +240,50 @@
   font-size: 11px;
 }
 
+.commitment__details {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-status {
+  display: inline-block;
+  margin-top: 7px;
+  color: var(--teal-dark);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.assignment-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.assignment-form input {
+  min-width: 0;
+  min-height: 30px;
+  padding-block: 5px;
+  font-size: 11px;
+}
+
+.assignment-form button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding-inline: 8px;
+  font-size: 10px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .conflict-badge {
   flex: 0 0 auto;
   padding: 4px 7px;
@@ -220,6 +299,39 @@
   flex-direction: column;
   gap: 8px;
   margin: 0;
+}
+
+.tool-call__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tool-call__heading h3 {
+  overflow-wrap: anywhere;
+}
+
+.call-result {
+  flex: 0 0 auto;
+  color: var(--teal-dark);
+  font-size: 10px;
+}
+
+.call-result--error {
+  color: #a13f37;
+}
+
+.activity-empty {
+  margin: 12px 0 0 !important;
+  font-size: 11px !important;
+}
+
+.tool-call time {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 9px;
 }
 
 .tool-call dl > div {

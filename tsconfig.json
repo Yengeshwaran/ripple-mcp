@@ -42,6 +42,7 @@
     "skipLibCheck": true,
   },
   "include": [
-    "services/mcp-server/src/**/*.ts"
+    "services/mcp-server/src/**/*.ts",
+    "tests/**/*.ts"
   ]
 }

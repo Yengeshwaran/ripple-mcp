@@ -9,6 +9,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
+import { registerTaskTools } from "./tools/tasks.js";
 
 const PORT = Number(process.env["PORT"] ?? 3100);
 
@@ -38,6 +39,9 @@ function buildMcpServer(): McpServer {
       ],
     }),
   );
+
+  // task management tools
+  registerTaskTools(mcp);
 
   return mcp;
 }

@@ -75,7 +75,6 @@ async def extract_candidates(
 
     body = {
         "model": settings.openrouter_model,
-        "temperature": 0,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": _transcript_payload(segments, meeting_date, timezone)},

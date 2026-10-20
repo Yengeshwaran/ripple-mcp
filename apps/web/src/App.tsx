@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import './App.css'
+import MeetingReviewPanel from './MeetingReviewPanel'
 import { McpTaskClient } from './services/mcpTaskClient'
 import { MockTaskClient } from './services/mockTaskClient'
 import type { CreateTaskInput, Task, TaskClient, TaskToolCall } from './services/taskClient'
@@ -165,6 +166,12 @@ function App() {
       </header>
 
       <main className="dashboard">
+        <MeetingReviewPanel
+          taskClient={taskClient}
+          teammates={[...new Set(tasks.map((task) => task.assignee).filter((assignee): assignee is string => Boolean(assignee)))]}
+          onTasksSaved={() => loadTasks(true)}
+        />
+
         <div className="panel-grid">
           <section className="panel request-panel" aria-labelledby="request-title">
             <h1 id="request-title">Create a commitment</h1>

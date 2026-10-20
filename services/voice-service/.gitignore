@@ -1,0 +1,5 @@
+# Python caches and local test output (voice service only)
+__pycache__/
+*.pyc
+.pytest_cache/
+smoke-result*.json

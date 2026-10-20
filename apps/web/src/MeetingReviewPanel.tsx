@@ -193,6 +193,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     setSaveSummary(null)
     let savedCount = 0
     const failedTitles: string[] = []
+    let refreshError: string | null = null
     for (const candidate of approved) {
       const title = candidate.title.trim()
       if (!title) {
@@ -230,14 +231,18 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
       try {
         await onTasksSaved()
       } catch (error) {
-        setSaveSummary(`Saved ${savedCount} task${savedCount === 1 ? '' : 's'}, but could not refresh the task list: ${errorMessage(error, 'Refresh failed.')}`)
+        refreshError = errorMessage(error, 'Refresh failed.')
       }
     }
-    if (failedTitles.length > 0) {
-      setSaveSummary(`${savedCount} saved. Could not save: ${failedTitles.join(', ')}.`)
-    } else {
-      setSaveSummary(`${savedCount} approved task${savedCount === 1 ? '' : 's'} saved to commitments.`)
+    const resultMessages: string[] = []
+    if (savedCount > 0) {
+      resultMessages.push(`${savedCount} task${savedCount === 1 ? '' : 's'} saved.`)
     }
+    if (failedTitles.length > 0) {
+      resultMessages.push(`Could not save: ${failedTitles.join(', ')}.`)
+    }
+    if (refreshError) resultMessages.push(`Task list refresh failed: ${refreshError}`)
+    setSaveSummary(resultMessages.join(' '))
     setIsSaving(false)
   }
 
@@ -518,7 +523,9 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                                 type="button"
                                 onClick={() => setCandidateStatus(
                                   candidate.id,
-                                  candidate.reviewStatus === 'approved' ? 'pending' : 'approved',
+                                  candidate.reviewStatus === 'approved' || candidate.reviewStatus === 'rejected'
+                                    ? 'pending'
+                                    : 'approved',
                                 )}
                                 disabled={isSaving}
                               >

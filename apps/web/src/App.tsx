@@ -60,17 +60,19 @@ function App() {
   const initialLoadStarted = useRef(false)
 
   // Read tasks from the selected adapter and surface connection failures directly.
-  const loadTasks = useCallback(async (showLoading = false) => {
+  const loadTasks = useCallback(async (showLoading = false): Promise<string | null> => {
     if (showLoading) setIsLoadingTasks(true)
     setTaskLoadError(null)
     try {
       const loadedTasks = await taskClient.listTasks()
       setTasks(loadedTasks)
       setConnectionStatus(useMockTaskClient ? 'Mock adapter' : 'MCP connected')
+      return null
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load tasks.'
       setTaskLoadError(message)
       setConnectionStatus(useMockTaskClient ? 'Mock adapter' : 'MCP unavailable')
+      return message
     } finally {
       setIsLoadingTasks(false)
     }
@@ -169,7 +171,10 @@ function App() {
         <MeetingReviewPanel
           taskClient={taskClient}
           teammates={[...new Set(tasks.map((task) => task.assignee).filter((assignee): assignee is string => Boolean(assignee)))]}
-          onTasksSaved={() => loadTasks(true)}
+          onTasksSaved={async () => {
+            const error = await loadTasks(true)
+            if (error) throw new Error(error)
+          }}
         />
 
         <div className="panel-grid">

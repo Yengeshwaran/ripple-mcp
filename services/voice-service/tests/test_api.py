@@ -74,6 +74,7 @@ def test_valid_audio_returns_contract_json(client, providers, temp_upload_dir):
 @pytest.mark.parametrize(
     "data,name,ctype",
     [(MP3_BYTES, "a.mp3", "audio/mpeg"), (M4A_BYTES, "a.m4a", "audio/mp4"), (WEBM_BYTES, "a.webm", "audio/webm")],
+    ids=["mp3", "m4a", "webm"],
 )
 def test_other_supported_formats(client, providers, data, name, ctype):
     providers.extraction_replies = [httpx.Response(200, json=openrouter_reply({"candidate_tasks": []}))]

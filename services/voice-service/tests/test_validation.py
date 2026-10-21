@@ -92,6 +92,7 @@ def _inspect(tmp_path, data: bytes):
         webm_bytes([2]),
         webm_bytes([2], duration_ms=None),  # browser MediaRecorder output often has no Duration
     ],
+    ids=["m4a", "m4a-moov-at-end", "m4a-mvhd-v1", "mp4-brand-audio-only", "webm", "webm-no-duration"],
 )
 def test_audio_only_containers_accepted(tmp_path, data):
     info = _inspect(tmp_path, data)
@@ -110,6 +111,8 @@ def test_audio_only_containers_accepted(tmp_path, data):
         (webm_bytes([2], include_tracks=False), "supported"),  # cannot confirm audio-only
         (webm_bytes([]), "supported"),
     ],
+    ids=["mp4-video-audio", "mp4-video-only", "webm-video-audio", "webm-video-only",
+         "mp4-no-audio", "mp4-no-moov", "webm-no-tracks", "webm-empty-tracks"],
 )
 def test_video_or_unverifiable_containers_rejected(tmp_path, data, expected_message_word):
     with pytest.raises(VoiceServiceError) as exc:
@@ -153,6 +156,7 @@ def test_container_durations_read_correctly(tmp_path):
         (mp4_bytes([b"soun"], duration_seconds=200), "long.m4a"),
         (webm_bytes([2], duration_ms=200_000), "long.webm"),
     ],
+    ids=["wav", "m4a", "webm"],
 )
 def test_long_recording_rejected_before_upload_to_provider(client, providers, temp_upload_dir, data, name):
     resp = post(client, data, name)
@@ -164,7 +168,9 @@ def test_long_recording_rejected_before_upload_to_provider(client, providers, te
     assert list(temp_upload_dir.iterdir()) == []
 
 
-@pytest.mark.parametrize("data, name", [(MP3_BYTES, "long.mp3"), (webm_bytes([2], duration_ms=None), "rec.webm")])
+@pytest.mark.parametrize(
+    "data, name", [(MP3_BYTES, "long.mp3"), (webm_bytes([2], duration_ms=None), "rec.webm")], ids=["mp3", "webm-no-duration"]
+)
 def test_long_recording_without_container_duration_rejected_after_transcription(client, providers, temp_upload_dir, data, name):
     providers.transcript = {**providers.transcript, "audio_duration": 240}
     resp = post(client, data, name)

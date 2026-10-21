@@ -3,7 +3,7 @@ import { analyzeMeeting, type CandidateTask, type MeetingAnalysis } from './serv
 import { sampleMeetingAnalysis } from './services/voiceAnalysisFixture'
 import type { TaskClient } from './services/taskClient'
 
-const maxAudioBytes = 50 * 1024 * 1024
+const maxAudioBytes = 25 * 1024 * 1024
 const maxAudioDurationSeconds = 3 * 60
 const supportedExtensions = new Set(['wav', 'mp3', 'm4a', 'webm'])
 
@@ -119,7 +119,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
       return
     }
     if (file.size > maxAudioBytes) {
-      setFileError(`This file exceeds the 50 MB demo limit (${formatFileSize(file.size)}).`)
+      setFileError(`This file exceeds the 25 MB upload limit (${formatFileSize(file.size)}).`)
       return
     }
     if (file.type && !file.type.startsWith('audio/') && file.type !== 'application/octet-stream') {
@@ -189,12 +189,14 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
   }
 
   const setCandidateField = (candidateId: string, field: 'title' | 'description' | 'deadlineLocal', value: string) => {
+    if (isSamplePreview) return
     setCandidates((current) => current.map((candidate) =>
       candidate.id === candidateId ? { ...candidate, [field]: value, saveError: undefined } : candidate,
     ))
   }
 
   const setCandidateStatus = (candidateId: string, reviewStatus: ReviewStatus) => {
+    if (isSamplePreview) return
     setCandidates((current) => current.map((candidate) =>
       candidate.id === candidateId ? { ...candidate, reviewStatus, saveError: undefined } : candidate,
     ))
@@ -209,6 +211,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
   }
 
   const handleSaveApproved = async () => {
+    if (isSamplePreview) return
     const approved = candidates.filter((candidate) => candidate.reviewStatus === 'approved')
     if (approved.length === 0) return
 
@@ -286,6 +289,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     eligibleCandidates.every((candidate) => selectedCandidateIds.has(candidate.id))
 
   const toggleCandidateSelection = (candidateId: string) => {
+    if (isSamplePreview) return
     setSelectedCandidateIds((current) => {
       const next = new Set(current)
       if (next.has(candidateId)) next.delete(candidateId)
@@ -295,6 +299,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
   }
 
   const approveSelectedCandidates = () => {
+    if (isSamplePreview) return
     setCandidates((current) => current.map((candidate) =>
       selectedCandidateIds.has(candidate.id) && candidate.reviewStatus === 'pending'
         ? { ...candidate, reviewStatus: 'approved' }
@@ -334,7 +339,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
             <span className="step-icon" aria-hidden="true">↑</span>
             <div>
               <h2>Upload meeting audio</h2>
-              <p>WAV, MP3, M4A or WebM · up to 50 MB · 3 minutes</p>
+              <p>WAV, MP3, M4A, or WebM · up to 25 MB · 3 minutes.</p>
             </div>
           </div>
           <label
@@ -451,6 +456,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                       <select
                         aria-label={`Map ${speaker.speaker_id} to a teammate`}
                         value={value && !teammates.includes(value) ? '__custom__' : value}
+                        disabled={isSamplePreview}
                         onChange={(event) => setSpeakerMappings((current) => ({
                           ...current,
                           [speaker.speaker_id]: event.target.value,
@@ -466,6 +472,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                           aria-label={`Teammate name for ${speaker.speaker_id}`}
                           placeholder="Teammate name"
                           value={customSpeakerMappings[speaker.speaker_id] ?? (value === '__custom__' ? '' : value)}
+                          disabled={isSamplePreview}
                           onChange={(event) => setCustomSpeakerMappings((current) => ({
                             ...current,
                             [speaker.speaker_id]: event.target.value,
@@ -513,6 +520,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                     <input
                       type="checkbox"
                       checked={allEligibleSelected}
+                      disabled={isSamplePreview}
                       onChange={() => setSelectedCandidateIds(allEligibleSelected
                         ? new Set()
                         : new Set(eligibleCandidates.map((candidate) => candidate.id)))}
@@ -549,6 +557,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                               <input
                                 type="checkbox"
                                 checked={selectedCandidateIds.has(candidate.id)}
+                                disabled={isSamplePreview}
                                 onChange={() => toggleCandidateSelection(candidate.id)}
                                 aria-label={`Select ${candidate.title}`}
                               />
@@ -565,7 +574,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                           className="candidate-title-input"
                           value={candidate.title}
                           onChange={(event) => setCandidateField(candidate.id, 'title', event.target.value)}
-                          disabled={candidate.reviewStatus === 'saved' || isSaving}
+                          disabled={isSamplePreview || candidate.reviewStatus === 'saved' || isSaving}
                         />
                         <label className="field-label" htmlFor={`candidate-description-${candidate.id}`}>Description</label>
                         <textarea
@@ -573,7 +582,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                           value={candidate.description}
                           rows={2}
                           onChange={(event) => setCandidateField(candidate.id, 'description', event.target.value)}
-                          disabled={candidate.reviewStatus === 'saved' || isSaving}
+                          disabled={isSamplePreview || candidate.reviewStatus === 'saved' || isSaving}
                         />
                         <div className="candidate-meta-grid">
                           <div>
@@ -593,7 +602,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                               type="datetime-local"
                               value={candidate.deadlineLocal}
                               onChange={(event) => setCandidateField(candidate.id, 'deadlineLocal', event.target.value)}
-                              disabled={candidate.reviewStatus === 'saved' || isSaving}
+                              disabled={isSamplePreview || candidate.reviewStatus === 'saved' || isSaving}
                             />
                             <span className="deadline-source">
                               {candidate.deadline_text
@@ -627,7 +636,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                                 className="reject-button"
                                 type="button"
                                 onClick={() => setCandidateStatus(candidate.id, 'rejected')}
-                                disabled={isSaving}
+                                disabled={isSamplePreview || isSaving}
                               >
                                 Reject
                               </button>
@@ -640,7 +649,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                                     ? 'pending'
                                     : 'approved',
                                 )}
-                                disabled={isSaving}
+                                disabled={isSamplePreview || isSaving}
                               >
                                 {candidate.reviewStatus === 'approved'
                                   ? 'Approved'

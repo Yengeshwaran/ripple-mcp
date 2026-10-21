@@ -282,7 +282,7 @@ function SettingsPage({
             <div><dt>Task adapter</dt><dd>{useMockTaskClient ? 'Mock adapter' : 'MCP task tools'}</dd></div>
             <div><dt>Connection status</dt><dd><span className={`settings-connection${connectionStatus === 'Connected' ? ' is-connected' : connectionStatus === 'Unavailable' ? ' is-error' : ''}`}><span className="status-dot" />{useMockTaskClient ? 'Mock mode' : connectionStatus}</span></dd></div>
             <div><dt>Audio formats</dt><dd>WAV, MP3, M4A, WebM</dd></div>
-            <div><dt>Recording limit</dt><dd>50 MB · 3 minutes</dd></div>
+            <div><dt>Recording limit</dt><dd>25 MB · 3 minutes</dd></div>
           </dl>
           <p className="settings-footnote">Connection settings are managed by the app environment and cannot be changed here.</p>
         </section>

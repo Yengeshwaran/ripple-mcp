@@ -150,9 +150,20 @@ function parseMeetingAnalysis(value: unknown): MeetingAnalysis {
   }
 }
 
-function errorMessageFromResponse(value: unknown): string | undefined {
-  if (!isRecord(value) || !isRecord(value.error)) return undefined
-  return typeof value.error.message === 'string' ? value.error.message : undefined
+function errorMessageFromResponse(value: unknown, status: number): string {
+  if (!isRecord(value) || !isRecord(value.error)) {
+    return `Meeting analysis failed (HTTP ${status}). Please try again.`
+  }
+
+  const code = typeof value.error.code === 'string' ? value.error.code.trim() : ''
+  const message = typeof value.error.message === 'string' ? value.error.message.trim() : ''
+  const statusAndCode = code
+    ? `${status} ${code.replace(new RegExp(`^${status}\\s*`), '')}`
+    : `HTTP ${status}`
+
+  if (message) return `${statusAndCode}: ${message}`
+  if (code) return statusAndCode
+  return `Meeting analysis failed (HTTP ${status}). Please try again.`
 }
 
 export async function analyzeMeeting(file: File): Promise<MeetingAnalysis> {
@@ -170,8 +181,7 @@ export async function analyzeMeeting(file: File): Promise<MeetingAnalysis> {
 
   const responseBody: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
-    const serverMessage = errorMessageFromResponse(responseBody)
-    throw new Error(serverMessage ?? `Meeting analysis failed (HTTP ${response.status}).`)
+    throw new Error(errorMessageFromResponse(responseBody, response.status))
   }
   return parseMeetingAnalysis(responseBody)
 }

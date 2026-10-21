@@ -25,6 +25,7 @@ def _int(name: str, default: int | None) -> int | None:
 @dataclass(frozen=True)
 class Settings:
     max_upload_bytes: int
+    max_audio_seconds: int  # 0 = no duration limit
     assemblyai_api_key: str
     assemblyai_language_code: str | None
     assemblyai_speakers_expected: int | None
@@ -38,6 +39,7 @@ class Settings:
 def get_settings() -> Settings:
     return Settings(
         max_upload_bytes=(_int("MAX_UPLOAD_MB", 25) or 25) * 1024 * 1024,
+        max_audio_seconds=max(0, _int("MAX_AUDIO_SECONDS", 180) or 0),
         assemblyai_api_key=os.getenv("ASSEMBLYAI_API_KEY", "").strip(),
         assemblyai_language_code=os.getenv("ASSEMBLYAI_LANGUAGE_CODE", "").strip() or None,
         assemblyai_speakers_expected=_int("ASSEMBLYAI_SPEAKERS_EXPECTED", None),

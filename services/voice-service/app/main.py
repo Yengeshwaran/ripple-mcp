@@ -64,6 +64,21 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+DURATION_TOLERANCE_SECONDS = 1.0  # container/provider rounding
+
+
+def _check_duration(seconds: float | int | None, settings: Settings) -> None:
+    limit = settings.max_audio_seconds
+    if not limit or seconds is None:
+        return
+    try:
+        value = float(seconds)
+    except (TypeError, ValueError):
+        return
+    if value > limit + DURATION_TOLERANCE_SECONDS:
+        raise errors.audio_too_long(limit)
+
+
 def _check_context(meeting_date: str | None, timezone: str | None) -> tuple[str | None, str | None]:
     meeting_date = (meeting_date or "").strip() or None
     timezone = (timezone or "").strip() or None
@@ -93,12 +108,18 @@ async def analyze_meeting(
     meeting_date, timezone = _check_context(meeting_date, timezone)
     meeting_id = f"meeting_{uuid.uuid4().hex[:12]}"
 
-    path, fmt = await save_upload(file, settings.max_upload_bytes)
+    path, info = await save_upload(file, settings.max_upload_bytes)
     try:
-        log.info("analyze %s format=%s", meeting_id, fmt)
+        # Duration, part 1: when the container states its length, reject before any provider call.
+        _check_duration(info.duration_seconds, settings)
+        log.info("analyze %s format=%s", meeting_id, info.fmt)
         transcript = await transcribe(client, settings, path)
     finally:
         path.unlink(missing_ok=True)
+
+    # Duration, part 2: always re-check with the length AssemblyAI measured (covers MP3 and WebM without
+    # a Duration field). Runs before the LLM step, so an over-long recording never produces suggestions.
+    _check_duration(transcript.get("audio_duration"), settings)
 
     speakers, segments = normalize(transcript)
     if not segments:

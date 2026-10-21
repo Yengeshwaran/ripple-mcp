@@ -20,11 +20,13 @@ from app.config import get_settings  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
-# Minimal byte headers that pass format sniffing (content after the header is irrelevant to mocked providers).
-WAV_BYTES = b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 64
+# Small but structurally real audio files built in memory (see media_builders.py).
+from media_builders import mp4_bytes, wav_bytes, webm_bytes  # noqa: E402
+
+WAV_BYTES = wav_bytes(seconds=1)
 MP3_BYTES = b"ID3\x04\x00\x00\x00\x00\x00\x00" + b"\x00" * 64
-M4A_BYTES = b"\x00\x00\x00\x20ftypM4A " + b"\x00" * 64
-WEBM_BYTES = b"\x1a\x45\xdf\xa3" + b"\x00" * 64
+M4A_BYTES = mp4_bytes(handlers=[b"soun"], duration_seconds=10)
+WEBM_BYTES = webm_bytes(track_types=[2], duration_ms=10_000)
 
 
 def load_fixture(name: str) -> dict:
@@ -85,6 +87,7 @@ def settings():
     return replace(
         base,
         max_upload_bytes=1024 * 1024,
+        max_audio_seconds=180,
         assemblyai_api_key="test-assemblyai-key",
         assemblyai_language_code=None,
         assemblyai_speakers_expected=None,

@@ -29,6 +29,7 @@ def main() -> int:
     parser.add_argument("--meeting-date")
     parser.add_argument("--timezone")
     parser.add_argument("--out", type=Path, help="write the full JSON response here (do not commit it)")
+    parser.add_argument("--show-transcript", action="store_true", help="print segments on screen to check them (private)")
     args = parser.parse_args()
 
     data = {k: v for k, v in {"meeting_date": args.meeting_date, "timezone": args.timezone}.items() if v}
@@ -46,6 +47,15 @@ def main() -> int:
     MeetingAnalysis.model_validate(body)
     print("Response matches the contract.")
     print(f"speakers={len(body['speakers'])} segments={len(body['segments'])} candidates={len(body['candidate_tasks'])}")
+    per_speaker: dict = {}
+    for s in body["segments"]:
+        per_speaker[s["speaker_id"]] = per_speaker.get(s["speaker_id"], 0) + 1
+    print("segments per speaker:", per_speaker)
+    ordered = all(a["start_ms"] <= b["start_ms"] for a, b in zip(body["segments"], body["segments"][1:]))
+    print("timestamps in order:", ordered)
+    if args.show_transcript:
+        for s in body["segments"]:
+            print(f"  {s['id']} {s['speaker_id']} {s['start_ms'] / 1000:6.1f}-{s['end_ms'] / 1000:6.1f}s  {s['text']}")
     for c in body["candidate_tasks"]:
         print(f"- {c['title']} | owner={c['owner_speaker_id']} | deadline_text={c['deadline_text']} | deadline_iso={c['deadline_iso']} | evidence={c['evidence_segment_ids']}")
     if args.out:

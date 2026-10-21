@@ -22,6 +22,23 @@ log = logging.getLogger("voice.transcription")
 BASE_URL = "https://api.assemblyai.com"
 
 
+def build_transcript_request(audio_url: str, settings: Settings) -> dict:
+    """Body for POST /v2/transcript.
+
+    AssemblyAI does not accept language_code together with language_detection:
+    - ASSEMBLYAI_LANGUAGE_CODE set   -> {"language_code": "<code>"}       (fixed language)
+    - ASSEMBLYAI_LANGUAGE_CODE blank -> {"language_detection": true}      (automatic detection)
+    """
+    body: dict = {"audio_url": audio_url, "speaker_labels": True}
+    if settings.assemblyai_language_code:
+        body["language_code"] = settings.assemblyai_language_code
+    else:
+        body["language_detection"] = True
+    if settings.assemblyai_speakers_expected:
+        body["speakers_expected"] = settings.assemblyai_speakers_expected
+    return body
+
+
 async def transcribe(client: httpx.AsyncClient, settings: Settings, audio_path: Path) -> dict:
     """Upload audio, request a diarized transcript, poll until done. Returns the raw transcript JSON."""
     if not settings.assemblyai_api_key:
@@ -34,12 +51,7 @@ async def transcribe(client: httpx.AsyncClient, settings: Settings, audio_path: 
     if not upload_url:
         raise errors.provider_error("TRANSCRIPTION")
 
-    body: dict = {"audio_url": upload_url, "speaker_labels": True}
-    if settings.assemblyai_language_code:
-        body["language_code"] = settings.assemblyai_language_code
-    if settings.assemblyai_speakers_expected:
-        body["speakers_expected"] = settings.assemblyai_speakers_expected
-
+    body = build_transcript_request(upload_url, settings)
     job = await _call(client, "POST", f"{BASE_URL}/v2/transcript", headers=headers, json=body)
     job_id = job.get("id")
     if not job_id:

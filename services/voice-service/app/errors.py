@@ -38,6 +38,16 @@ def unsupported_audio() -> VoiceServiceError:
     return VoiceServiceError(415, "UNSUPPORTED_AUDIO_TYPE", "Upload a supported audio format: WAV, MP3, M4A or WebM.")
 
 
+def video_not_supported() -> VoiceServiceError:
+    return VoiceServiceError(415, "UNSUPPORTED_AUDIO_TYPE", "This file contains video. Upload an audio-only recording (WAV, MP3, M4A or WebM).")
+
+
+def audio_too_long(limit_seconds: int) -> VoiceServiceError:
+    minutes, seconds = divmod(limit_seconds, 60)
+    limit = f"{minutes} minute{'s' if minutes != 1 else ''}" + (f" {seconds} seconds" if seconds else "")
+    return VoiceServiceError(413, "AUDIO_TOO_LONG", f"The recording is longer than the {limit} limit.")
+
+
 def no_speech() -> VoiceServiceError:
     return VoiceServiceError(422, "NO_SPEECH_DETECTED", "No speech was found in the recording.")
 

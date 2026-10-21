@@ -19,7 +19,7 @@ The meeting workflow posts the selected recording as `multipart/form-data` in th
 POST /api/voice/analyze-meeting
 ```
 
-During local development, Vite proxies `/api/voice` to `http://localhost:8002`. Start the voice API on that port before uploading a real recording. The frontend accepts WAV, MP3, M4A, and WebM, checks the 25 MB and 3-minute limits when browser metadata is available, and displays structured server error codes and messages without substituting fake results. Server-side validation remains authoritative.
+During local development, Vite proxies `/api/voice` to `http://localhost:8002`. Start the voice API on that port before uploading a real recording. The frontend accepts WAV, MP3, M4A, and WebM, checks the 25 MB and 3-minute limits when browser metadata is available (including the backend's 1-second duration-rounding tolerance), and displays structured server error codes and messages without substituting fake results. Optional meeting date (`YYYY-MM-DD`) and timezone (IANA name) fields are sent as `meeting_date` and `timezone`; provide both when you want the service to resolve explicit spoken deadlines. Server-side validation remains authoritative.
 
 Use **Preview with sample** to inspect the transcript, speaker mapping, and candidate review UI without a running voice service. The sample is clearly marked synthetic and cannot be saved. For real analysis results, map speaker labels to teammates, edit candidates, explicitly approve them, and choose **Save approved**. Task writes use the existing MCP client; the voice API never writes tasks directly.
 

@@ -5,6 +5,7 @@ import type { TaskClient } from './services/taskClient'
 
 const maxAudioBytes = 25 * 1024 * 1024
 const maxAudioDurationSeconds = 3 * 60
+const audioDurationRoundingToleranceSeconds = 1
 const supportedExtensions = new Set(['wav', 'mp3', 'm4a', 'webm'])
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'saved'
@@ -72,6 +73,8 @@ function errorMessage(error: unknown, fallback: string): string {
 function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingReviewPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedDuration, setSelectedDuration] = useState<number | undefined>()
+  const [meetingDate, setMeetingDate] = useState('')
+  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [fileWarning, setFileWarning] = useState<string | null>(null)
@@ -131,7 +134,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     try {
       const duration = await inspectAudioDuration(file)
       setSelectedDuration(duration)
-      if (duration !== undefined && duration > maxAudioDurationSeconds) {
+      if (duration !== undefined && duration > maxAudioDurationSeconds + audioDurationRoundingToleranceSeconds) {
         setFileError('Choose a recording that is 3 minutes or shorter.')
       } else if (duration === undefined) {
         setFileWarning('Duration could not be checked in this browser. The server will enforce the 3-minute limit.')
@@ -164,7 +167,10 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     setFileWarning(null)
     resetReview()
     try {
-      const result = await analyzeMeeting(selectedFile)
+      const result = await analyzeMeeting(selectedFile, {
+        meetingDate: meetingDate || undefined,
+        timezone: timezone.trim() || undefined,
+      })
       setAnalysis(result)
       setCandidates(createReviewCandidates(result))
     } catch (error) {
@@ -342,6 +348,31 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
               <p>WAV, MP3, M4A, or WebM · up to 25 MB · 3 minutes.</p>
             </div>
           </div>
+          <div className="meeting-context-grid">
+            <label className="meeting-context-field" htmlFor="meeting-date">
+              <span>Meeting date <small>Optional</small></span>
+              <input
+                id="meeting-date"
+                type="date"
+                value={meetingDate}
+                onChange={(event) => setMeetingDate(event.target.value)}
+                disabled={isInspectingFile || isAnalyzing || isSaving}
+              />
+            </label>
+            <label className="meeting-context-field" htmlFor="meeting-timezone">
+              <span>Timezone <small>IANA name</small></span>
+              <input
+                id="meeting-timezone"
+                type="text"
+                value={timezone}
+                onChange={(event) => setTimezone(event.target.value)}
+                placeholder="e.g. America/Chicago"
+                autoComplete="off"
+                disabled={isInspectingFile || isAnalyzing || isSaving}
+              />
+            </label>
+            <p className="meeting-context-help">Provide the date and timezone to help resolve clearly spoken deadlines.</p>
+          </div>
           <label
             className={`dropzone${selectedFile ? ' dropzone--selected' : ''}${isDraggingFile ? ' dropzone--dragging' : ''}`}
             htmlFor="meeting-audio"
@@ -451,7 +482,11 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                       </span>
                       <div className="speaker-map-row__identity">
                         <strong>{speaker.speaker_id}</strong>
-                        <span>First heard at {formatTimestamp(speaker.first_seen_ms)}</span>
+                        <span>
+                          {speaker.first_seen_ms === null
+                            ? 'First heard time unavailable'
+                            : `First heard at ${formatTimestamp(speaker.first_seen_ms)}`}
+                        </span>
                       </div>
                       <select
                         aria-label={`Map ${speaker.speaker_id} to a teammate`}

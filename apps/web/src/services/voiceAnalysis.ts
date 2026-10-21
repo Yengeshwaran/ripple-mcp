@@ -1,6 +1,6 @@
 export type MeetingSpeaker = {
   speaker_id: string
-  first_seen_ms: number
+  first_seen_ms: number | null
 }
 
 export type TranscriptSegment = {
@@ -28,6 +28,11 @@ export type MeetingAnalysis = {
   speakers: MeetingSpeaker[]
   segments: TranscriptSegment[]
   candidate_tasks: CandidateTask[]
+}
+
+export type MeetingContext = {
+  meetingDate?: string
+  timezone?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,7 +80,9 @@ function parseMeetingAnalysis(value: unknown): MeetingAnalysis {
     if (!isRecord(entry)) throw new Error('Voice analysis response contains an invalid speaker.')
     return {
       speaker_id: requiredString(entry, 'speaker_id'),
-      first_seen_ms: timestamp(entry.first_seen_ms, 'first_seen_ms'),
+      first_seen_ms: entry.first_seen_ms === null || entry.first_seen_ms === undefined
+        ? null
+        : timestamp(entry.first_seen_ms, 'first_seen_ms'),
     }
   })
   const speakerIds = new Set(speakers.map((speaker) => speaker.speaker_id))
@@ -106,6 +113,10 @@ function parseMeetingAnalysis(value: unknown): MeetingAnalysis {
     if (deadline_iso !== null && !isIsoDateTime(deadline_iso)) {
       throw new Error('Voice analysis response contains an invalid normalized deadline.')
     }
+    const deadline_text = nullableString(entry, 'deadline_text')
+    if (deadline_iso !== null && deadline_text === null) {
+      throw new Error('Voice analysis response contains a normalized deadline without spoken deadline text.')
+    }
     const owner_speaker_id = nullableString(entry, 'owner_speaker_id')
     if (owner_speaker_id !== null && !speakerIds.has(owner_speaker_id)) {
       throw new Error('Voice analysis response contains a task owner with an unknown speaker ID.')
@@ -122,7 +133,7 @@ function parseMeetingAnalysis(value: unknown): MeetingAnalysis {
       (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1)) {
       throw new Error('Voice analysis response contains an invalid confidence score.')
     }
-    if (typeof entry.needs_review !== 'boolean') {
+    if (entry.needs_review !== true) {
       throw new Error('Voice analysis response contains an invalid needs_review field.')
     }
 
@@ -131,7 +142,7 @@ function parseMeetingAnalysis(value: unknown): MeetingAnalysis {
       title: requiredString(entry, 'title'),
       description: typeof entry.description === 'string' ? entry.description : '',
       owner_speaker_id,
-      deadline_text: nullableString(entry, 'deadline_text'),
+      deadline_text,
       deadline_iso,
       evidence_segment_ids: entry.evidence_segment_ids,
       ...(confidence !== undefined && { confidence }),
@@ -166,9 +177,11 @@ function errorMessageFromResponse(value: unknown, status: number): string {
   return `Meeting analysis failed (HTTP ${status}). Please try again.`
 }
 
-export async function analyzeMeeting(file: File): Promise<MeetingAnalysis> {
+export async function analyzeMeeting(file: File, context: MeetingContext = {}): Promise<MeetingAnalysis> {
   const body = new FormData()
   body.append('file', file)
+  if (context.meetingDate) body.append('meeting_date', context.meetingDate)
+  if (context.timezone) body.append('timezone', context.timezone)
 
   let response: Response
   try {

@@ -1019,6 +1019,71 @@ summary:focus-visible {
   }
 }
 
+.meeting-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0 0 12px;
+}
+
+.meeting-context-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: #4f5f5a;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.meeting-context-field span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.meeting-context-field small {
+  color: #83908c;
+  font-size: 10px;
+  font-weight: 450;
+}
+
+.meeting-context-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #dfe6e3;
+  border-radius: 6px;
+  background: #fff;
+  color: #263630;
+  font: inherit;
+  font-weight: 450;
+}
+
+.meeting-context-field input:focus-visible {
+  border-color: #4b9b83;
+  outline: 3px solid rgb(75 155 131 / 16%);
+}
+
+.meeting-context-field input:disabled {
+  background: #f5f7f6;
+  color: #82908a;
+}
+
+.meeting-context-help {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  color: #73817c;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+@media (max-width: 540px) {
+  .meeting-context-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Commitment Radar workspace shell */
 :root {
   --page: #f5f7f8;

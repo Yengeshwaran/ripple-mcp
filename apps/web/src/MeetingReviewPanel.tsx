@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useMemo, useState, type ChangeEvent, type DragEvent } from 'react'
 import { analyzeMeeting, type CandidateTask, type MeetingAnalysis } from './services/voiceAnalysis'
 import { sampleMeetingAnalysis } from './services/voiceAnalysisFixture'
 import type { TaskClient } from './services/taskClient'
@@ -71,6 +71,8 @@ function errorMessage(error: unknown, fallback: string): string {
 
 function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingReviewPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedDuration, setSelectedDuration] = useState<number | undefined>()
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const [fileWarning, setFileWarning] = useState<string | null>(null)
   const [analysisError, setAnalysisError] = useState<string | null>(null)
@@ -83,6 +85,9 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
   const [candidates, setCandidates] = useState<ReviewCandidate[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveSummary, setSaveSummary] = useState<string | null>(null)
+  const [transcriptSearch, setTranscriptSearch] = useState('')
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null)
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set())
 
   const resetReview = () => {
     setAnalysis(null)
@@ -92,12 +97,14 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     setSaveSummary(null)
     setAnalysisError(null)
     setIsSamplePreview(false)
+    setTranscriptSearch('')
+    setSelectedSegmentId(null)
+    setSelectedCandidateIds(new Set())
   }
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null
-    event.currentTarget.value = ''
+  const inspectSelectedFile = async (file: File | null) => {
     setSelectedFile(file)
+    setSelectedDuration(undefined)
     setFileError(null)
     setFileWarning(null)
     resetReview()
@@ -123,6 +130,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     setIsInspectingFile(true)
     try {
       const duration = await inspectAudioDuration(file)
+      setSelectedDuration(duration)
       if (duration !== undefined && duration > maxAudioDurationSeconds) {
         setFileError('Choose a recording that is 3 minutes or shorter.')
       } else if (duration === undefined) {
@@ -133,6 +141,20 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     } finally {
       setIsInspectingFile(false)
     }
+  }
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    event.currentTarget.value = ''
+    void inspectSelectedFile(file)
+  }
+
+  const handleFileDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setIsDraggingFile(false)
+    if (isInspectingFile || isAnalyzing || isSaving) return
+    const file = event.dataTransfer.files[0] ?? null
+    if (file) void inspectSelectedFile(file)
   }
 
   const handleAnalyze = async () => {
@@ -163,6 +185,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
     setCustomSpeakerMappings({})
     setSaveSummary(null)
     setIsSamplePreview(true)
+    setSelectedCandidateIds(new Set())
   }
 
   const setCandidateField = (candidateId: string, field: 'title' | 'description' | 'deadlineLocal', value: string) => {
@@ -248,9 +271,41 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
 
   const approvedCount = candidates.filter((candidate) => candidate.reviewStatus === 'approved').length
   const segmentById = new Map((analysis?.segments ?? []).map((segment) => [segment.id, segment]))
+  const visibleTranscriptSegments = useMemo(
+    () => (analysis?.segments ?? []).filter((segment) =>
+      !transcriptSearch.trim() || segment.text.toLocaleLowerCase().includes(transcriptSearch.trim().toLocaleLowerCase()) ||
+      (segment.speaker_id ?? '').toLocaleLowerCase().includes(transcriptSearch.trim().toLocaleLowerCase()) ||
+      (resolvedSpeakerMapping(segment.speaker_id) ?? '').toLocaleLowerCase().includes(transcriptSearch.trim().toLocaleLowerCase()),
+    ),
+    [analysis, transcriptSearch, speakerMappings, customSpeakerMappings],
+  )
+  const eligibleCandidates = candidates.filter((candidate) =>
+    candidate.reviewStatus === 'pending' || candidate.reviewStatus === 'approved',
+  )
+  const allEligibleSelected = eligibleCandidates.length > 0 &&
+    eligibleCandidates.every((candidate) => selectedCandidateIds.has(candidate.id))
+
+  const toggleCandidateSelection = (candidateId: string) => {
+    setSelectedCandidateIds((current) => {
+      const next = new Set(current)
+      if (next.has(candidateId)) next.delete(candidateId)
+      else next.add(candidateId)
+      return next
+    })
+  }
+
+  const approveSelectedCandidates = () => {
+    setCandidates((current) => current.map((candidate) =>
+      selectedCandidateIds.has(candidate.id) && candidate.reviewStatus === 'pending'
+        ? { ...candidate, reviewStatus: 'approved' }
+        : candidate,
+    ))
+    setSelectedCandidateIds(new Set())
+    setSaveSummary(null)
+  }
 
   return (
-    <section className="meeting-workspace panel" aria-labelledby="meeting-title">
+    <section className="meeting-workspace panel" id="meeting-workspace" aria-labelledby="meeting-title">
       <div className="meeting-intro">
         <div>
           <span className="eyebrow">MEETING WORKFLOW</span>
@@ -261,15 +316,16 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
       </div>
 
       <ol className="workflow-steps" aria-label="Meeting review steps">
-        <li className={analysis ? 'workflow-step workflow-step--complete' : 'workflow-step workflow-step--active'}>
-          <span>01</span><strong>Upload</strong>
-        </li>
-        <li className={analysis ? 'workflow-step workflow-step--active' : 'workflow-step'}>
-          <span>02</span><strong>Review transcript</strong>
-        </li>
-        <li className={analysis && approvedCount > 0 ? 'workflow-step workflow-step--active' : 'workflow-step'}>
-          <span>03</span><strong>Confirm &amp; save</strong>
-        </li>
+        {([
+          { label: 'Upload', complete: Boolean(selectedFile && !fileError), active: !analysis && !isAnalyzing },
+          { label: 'Process', complete: Boolean(analysis), active: isAnalyzing },
+          { label: 'Review', complete: Boolean(analysis && candidates.length > 0 && candidates.every((candidate) => candidate.reviewStatus !== 'pending')), active: Boolean(analysis && (candidates.length === 0 || candidates.some((candidate) => candidate.reviewStatus === 'pending'))) },
+          { label: 'Save', complete: candidates.some((candidate) => candidate.reviewStatus === 'saved'), active: approvedCount > 0 },
+        ]).map((step, index) => (
+          <li className={`workflow-step${step.complete ? ' workflow-step--complete' : ''}${step.active ? ' workflow-step--active' : ''}`} key={step.label}>
+            <span>{step.complete ? '✓' : String(index + 1).padStart(2, '0')}</span><strong>{step.label}</strong>
+          </li>
+        ))}
       </ol>
 
       <div className="upload-layout">
@@ -281,11 +337,22 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
               <p>WAV, MP3, M4A or WebM · up to 50 MB · 3 minutes</p>
             </div>
           </div>
-          <label className={`dropzone${selectedFile ? ' dropzone--selected' : ''}`} htmlFor="meeting-audio">
+          <label
+            className={`dropzone${selectedFile ? ' dropzone--selected' : ''}${isDraggingFile ? ' dropzone--dragging' : ''}`}
+            htmlFor="meeting-audio"
+            onDragEnter={(event) => { event.preventDefault(); setIsDraggingFile(true) }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFile(false)
+            }}
+            onDrop={handleFileDrop}
+          >
             <span className="dropzone__icon" aria-hidden="true">♫</span>
-            <span className="dropzone__title">{selectedFile ? selectedFile.name : 'Choose an audio recording'}</span>
+            <span className="dropzone__title">{selectedFile ? selectedFile.name : 'Drop your recording here'}</span>
             <span className="dropzone__meta">
-              {selectedFile ? formatFileSize(selectedFile.size) : 'Select a file from your device'}
+              {selectedFile
+                ? `${formatFileSize(selectedFile.size)}${selectedDuration !== undefined ? ` · ${Math.floor(selectedDuration / 60)}:${String(Math.floor(selectedDuration % 60)).padStart(2, '0')}` : ''}`
+                : 'or browse files from your device'}
             </span>
             <input
               id="meeting-audio"
@@ -296,6 +363,11 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
             />
             <span className="secondary-button" aria-hidden="true">Browse files</span>
           </label>
+          {selectedFile && (
+            <button className="remove-file-button" type="button" disabled={isAnalyzing || isInspectingFile || isSaving} onClick={() => void inspectSelectedFile(null)}>
+              Remove recording
+            </button>
+          )}
           {fileError && <p className="inline-alert" role="alert">{fileError}</p>}
           {fileWarning && <p className="inline-warning" role="status">{fileWarning}</p>}
           {analysisError && <p className="inline-alert" role="alert">{analysisError}</p>}
@@ -306,7 +378,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
               onClick={() => void handleAnalyze()}
               disabled={!selectedFile || Boolean(fileError) || isInspectingFile || isAnalyzing || isSaving}
             >
-              {isInspectingFile ? 'Checking recording…' : isAnalyzing ? 'Analyzing recording…' : 'Analyze recording'}
+              {isInspectingFile ? 'Checking recording…' : isAnalyzing ? 'Analyzing recording…' : 'Analyze meeting'}
             </button>
             <button className="text-button" type="button" onClick={loadSamplePreview} disabled={isInspectingFile || isAnalyzing || isSaving}>
               Preview with sample
@@ -352,13 +424,18 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
 
           <div className="review-grid">
             <section className="review-section transcript-section" aria-labelledby="transcript-title">
-              <div className="section-title-row">
+              <div className="section-title-row" id="team-mapping">
                 <div>
                   <span className="eyebrow">STEP 01</span>
                   <h3 id="transcript-title">Transcript</h3>
                 </div>
                 <span className="section-count">{analysis.segments.length} lines</span>
               </div>
+              <label className="transcript-search">
+                <span className="visually-hidden">Search transcript</span>
+                <span aria-hidden="true">⌕</span>
+                <input value={transcriptSearch} onChange={(event) => setTranscriptSearch(event.target.value)} placeholder="Search transcript or speakers" />
+              </label>
               <div className="speaker-map-list">
                 {analysis.speakers.map((speaker, index) => {
                   const value = speakerMappings[speaker.speaker_id] ?? ''
@@ -400,11 +477,13 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                 })}
               </div>
               <ol className="transcript-list">
-                {analysis.segments.map((segment) => {
+                {visibleTranscriptSegments.map((segment) => {
                   const mappedName = resolvedSpeakerMapping(segment.speaker_id)
                   return (
-                    <li className="transcript-line" key={segment.id}>
-                      <time>{formatTimestamp(segment.start_ms)}–{formatTimestamp(segment.end_ms)}</time>
+                    <li className={`transcript-line${selectedSegmentId === segment.id ? ' transcript-line--selected' : ''}`} key={segment.id}>
+                      <button className="transcript-time" type="button" onClick={() => setSelectedSegmentId(segment.id)} aria-label={`Select transcript segment starting at ${formatTimestamp(segment.start_ms)}`}>
+                        {formatTimestamp(segment.start_ms)}–{formatTimestamp(segment.end_ms)}
+                      </button>
                       <div>
                         <span className="transcript-speaker">
                           {mappedName || segment.speaker_id || 'Unidentified speaker'}
@@ -415,6 +494,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                     </li>
                   )
                 })}
+                {visibleTranscriptSegments.length === 0 && <li className="transcript-no-results">No transcript lines match your search.</li>}
               </ol>
             </section>
 
@@ -427,6 +507,26 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                 <span className="section-count">{candidates.length} suggestions</span>
               </div>
               <p className="review-helper">Edit each suggestion, then approve or reject it. Nothing is saved until you choose “Save approved”.</p>
+              {eligibleCandidates.length > 0 && (
+                <div className="candidate-bulk-actions">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={allEligibleSelected}
+                      onChange={() => setSelectedCandidateIds(allEligibleSelected
+                        ? new Set()
+                        : new Set(eligibleCandidates.map((candidate) => candidate.id)))}
+                      aria-label="Select all eligible candidates"
+                    />
+                    Select all eligible
+                  </label>
+                  {selectedCandidateIds.size > 0 && (
+                    <button className="text-button" type="button" onClick={approveSelectedCandidates}>
+                      Approve selected ({selectedCandidateIds.size})
+                    </button>
+                  )}
+                </div>
+              )}
               {candidates.length === 0 ? (
                 <div className="empty-review">No task suggestions were returned for this meeting.</div>
               ) : (
@@ -439,9 +539,22 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                       .map((id) => segmentById.get(id))
                       .filter((segment) => segment !== undefined)
                     return (
-                      <article className={`candidate-card candidate-card--${candidate.reviewStatus}`} key={candidate.id}>
+                      <article
+                        className={`candidate-card candidate-card--${candidate.reviewStatus}${selectedCandidateIds.has(candidate.id) ? ' candidate-card--selected' : ''}`}
+                        key={candidate.id}
+                      >
                         <div className="candidate-card__top">
-                          <span className="candidate-number">SUGGESTION {String(index + 1).padStart(2, '0')}</span>
+                          <div className="candidate-label">
+                            {candidate.reviewStatus !== 'saved' && candidate.reviewStatus !== 'rejected' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedCandidateIds.has(candidate.id)}
+                                onChange={() => toggleCandidateSelection(candidate.id)}
+                                aria-label={`Select ${candidate.title}`}
+                              />
+                            )}
+                            <span className="candidate-number">SUGGESTION {String(index + 1).padStart(2, '0')}</span>
+                          </div>
                           <span className={`candidate-status candidate-status--${candidate.reviewStatus}`}>
                             {candidate.reviewStatus === 'pending' ? 'Needs review' : candidate.reviewStatus}
                           </span>
@@ -532,7 +645,7 @@ function MeetingReviewPanel({ taskClient, teammates, onTasksSaved }: MeetingRevi
                                 {candidate.reviewStatus === 'approved'
                                   ? 'Approved'
                                   : candidate.reviewStatus === 'rejected'
-                                    ? 'Restore'
+                                    ? 'Restore to pending'
                                     : 'Approve'}
                               </button>
                             </div>

@@ -35,6 +35,15 @@ Then start the web app from `apps/web/` in another terminal. Vite proxies the St
 
 To use the in-memory fallback during local UI development, set `VITE_USE_MOCK_TASK_CLIENT=true` in `apps/web/.env.local`. The default is the real MCP adapter. `VITE_MCP_URL` may override the endpoint URL when a same-origin proxy is not used.
 
+## Local demo sign-in
+
+The browser UI includes local sign-up/sign-in to preview profile and sign-out flows:
+
+- Demo email: `demo@commitmentradar.app`
+- Demo password: `RadarDemo2026!`
+
+New local accounts and password hashes are stored in this browser; the active UI session is stored for the current browser tab. This is a frontend demo only: the MCP and voice-service APIs do not authenticate users or enforce account permissions. Do not use real credentials or treat this as production security. Production authentication requires a trusted identity provider or server-side auth service and backend authorization checks.
+
 ## Build
 
 ```powershell

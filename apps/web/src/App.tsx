@@ -56,6 +56,9 @@ function summarizeToolCall(toolCall: TaskToolCall): string {
       if (toolCall.name === 'assign_task' && typeof task.assignee === 'string') {
         return `Assigned to ${task.assignee}`
       }
+      if (toolCall.name === 'update_task_status' && typeof task.status === 'string') {
+        return `Status set to ${task.status}`
+      }
     }
   } catch {
     return 'Completed successfully'
@@ -351,6 +354,8 @@ function App() {
   const [assignees, setAssignees] = useState<Record<string, string>>({})
   const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null)
   const [assignError, setAssignError] = useState<string | null>(null)
+  const [updatingStatusTaskId, setUpdatingStatusTaskId] = useState<string | null>(null)
+  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(
@@ -478,6 +483,22 @@ function App() {
       setConnectionStatus(useMockTaskClient ? 'Mock mode' : 'Unavailable')
     } finally {
       setAssigningTaskId(null)
+    }
+  }
+
+  async function handleToggleTaskStatus(taskId: string, currentStatus: TaskStatus) {
+    setStatusUpdateError(null)
+    const nextStatus: TaskStatus = currentStatus === 'done' ? 'open' : 'done'
+    setUpdatingStatusTaskId(taskId)
+    try {
+      const updatedTask = await taskClient.updateTaskStatus(taskId, nextStatus)
+      setTasks((current) => current.map((task) => task.id === taskId ? updatedTask : task))
+      setConnectionStatus(useMockTaskClient ? 'Mock mode' : 'Connected')
+    } catch (error) {
+      setStatusUpdateError(error instanceof Error ? error.message : 'Could not update status.')
+      setConnectionStatus(useMockTaskClient ? 'Mock mode' : 'Unavailable')
+    } finally {
+      setUpdatingStatusTaskId(null)
     }
   }
 
@@ -705,6 +726,7 @@ function App() {
                 ))}
               </div>
               {assignError && <p className="form-error assignment-error" role="alert">{assignError}</p>}
+              {statusUpdateError && <p className="form-error assignment-error" role="alert">{statusUpdateError}</p>}
               {isLoadingTasks ? (
                 <div className="task-state loading-state"><span className="spinner" aria-hidden="true" /> Loading commitments…</div>
               ) : taskLoadError ? (
@@ -723,7 +745,16 @@ function App() {
                 <ul className="commitment-list" aria-live="polite">
                   {visibleTasks.map((task) => (
                     <li className="commitment-row" key={task.id}>
-                      <span className={`task-check task-check--${task.status}`} aria-hidden="true">{task.status === 'done' ? '✓' : task.status === 'in_progress' ? '◒' : ''}</span>
+                      <button
+                        className={`task-check task-check--${task.status}${updatingStatusTaskId === task.id ? ' task-check--loading' : ''}`}
+                        type="button"
+                        aria-label={task.status === 'done' ? `Reopen "${task.title}"` : `Mark "${task.title}" as done`}
+                        aria-pressed={task.status === 'done'}
+                        disabled={updatingStatusTaskId === task.id}
+                        onClick={() => void handleToggleTaskStatus(task.id, task.status)}
+                      >
+                        {updatingStatusTaskId === task.id ? '…' : task.status === 'done' ? '✓' : task.status === 'in_progress' ? '◒' : ''}
+                      </button>
                       <div className="commitment__details">
                         <h3>{task.title}</h3>
                         {task.description && <p className="commitment-description">{task.description}</p>}
@@ -777,7 +808,7 @@ function App() {
                 <ul className="tool-call-list" aria-live="polite">
                   {toolCalls.map((toolCall) => (
                     <li className="activity-entry" key={toolCall.id}>
-                      <div className="activity-entry__icon" aria-hidden="true">{toolCall.name === 'list_tasks' ? '☷' : toolCall.name === 'assign_task' ? '♧' : '＋'}</div>
+                      <div className="activity-entry__icon" aria-hidden="true">{toolCall.name === 'list_tasks' ? '☷' : toolCall.name === 'assign_task' ? '♧' : toolCall.name === 'update_task_status' ? '✓' : '＋'}</div>
                       <div className="activity-entry__main">
                         <div className="activity-entry__title">
                           <strong>{toolCall.name}</strong>

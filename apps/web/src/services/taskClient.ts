@@ -31,4 +31,5 @@ export interface TaskClient {
   createTask(input: CreateTaskInput): Promise<Task>
   listTasks(filters?: TaskFilters): Promise<Task[]>
   assignTask(taskId: string, assignee: string): Promise<Task>
+  updateTaskStatus(taskId: string, status: TaskStatus): Promise<Task>
 }

@@ -271,3 +271,149 @@ describe("ping tool smoke test", () => {
     assert.ok(mcp, "McpServer instance created successfully with ping tool");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// updateTaskStatus is exported from db.ts — import it the same way as the others
+const { updateTaskStatus } = await import("../services/mcp-server/src/db.js");
+
+describe("update_task_status (db layer)", () => {
+  test("sets status to done", () => {
+    const task    = createTask({ title: "Status-test done" });
+    const updated = updateTaskStatus(task.id, "done");
+
+    assert.ok(updated,                              "should return updated task");
+    assert.equal(updated!.status,   "done");
+    assert.equal(updated!.id,       task.id);
+    assert.ok(updated!.updatedAt >= task.updatedAt, "updatedAt should advance");
+  });
+
+  test("sets status to in_progress", () => {
+    const task    = createTask({ title: "Status-test in_progress" });
+    const updated = updateTaskStatus(task.id, "in_progress");
+    assert.equal(updated!.status, "in_progress");
+  });
+
+  test("reopens a done task by setting status back to open", () => {
+    const task     = createTask({ title: "Status-test reopen" });
+    updateTaskStatus(task.id, "done");
+    const reopened = updateTaskStatus(task.id, "open");
+    assert.equal(reopened!.status, "open");
+  });
+
+  test("returns null for a nonexistent task id", () => {
+    const result = updateTaskStatus("nonexistent-status-000", "done");
+    assert.equal(result, null);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("update_task_status (MCP tool layer)", () => {
+  // Helper: build a server + registry once, reuse across tests in this suite.
+  // Returns { callHandler, validateInput } so tests can choose the right boundary.
+  async function buildStatusServer() {
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { registerTaskTools } = await import(
+      "../services/mcp-server/src/tools/tasks.js"
+    );
+    const mcp = new McpServer({ name: "test-status", version: "0.0.0" }, {});
+    registerTaskTools(mcp);
+
+    type RegistryEntry = {
+      handler:     (a: Record<string, unknown>) => Promise<unknown>;
+      inputSchema: unknown;
+    };
+    const registry = (mcp as unknown as {
+      _registeredTools: Record<string, RegistryEntry>;
+    })._registeredTools;
+
+    const entry = registry["update_task_status"];
+    if (!entry) throw new Error("Tool 'update_task_status' not registered");
+
+    return {
+      /** Call the handler directly — Zod has already run (or is deliberately skipped). */
+      callHandler: (args: Record<string, unknown>) =>
+        entry.handler(args) as Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+
+      /** Run only Zod validation via the SDK's public validateToolInput method.
+       *  Throws McpError(InvalidParams) on failure; returns parsed data on success. */
+      validateInput: (args: Record<string, unknown>) =>
+        (mcp as unknown as {
+          validateToolInput(
+            tool:     RegistryEntry,
+            args:     Record<string, unknown>,
+            toolName: string,
+          ): Promise<Record<string, unknown> | undefined>;
+        }).validateToolInput(entry, args, "update_task_status"),
+    };
+  }
+
+  async function callStatusTool(
+    args: Record<string, unknown>,
+  ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
+    const { callHandler } = await buildStatusServer();
+    return callHandler(args);
+  }
+
+  // ── Zod schema boundary ─────────────────────────────────────────────────────
+
+  test("rejects 'completed' as an invalid status at the MCP input-schema boundary", async () => {
+    const { validateInput } = await buildStatusServer();
+    await assert.rejects(
+      () => validateInput({ task_id: "any-id", status: "completed" }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "should throw an Error");
+        assert.ok(
+          err.message.includes("Input validation error") || err.message.includes("invalid_value"),
+          `error message should mention validation failure, got: ${err.message}`,
+        );
+        return true;
+      },
+      "should throw for status='completed'",
+    );
+  });
+
+  test("rejects 'invalid' as an invalid status at the MCP input-schema boundary", async () => {
+    const { validateInput } = await buildStatusServer();
+    await assert.rejects(
+      () => validateInput({ task_id: "any-id", status: "invalid" }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "should throw an Error");
+        assert.ok(
+          err.message.includes("Input validation error") || err.message.includes("invalid_value"),
+          `error message should mention validation failure, got: ${err.message}`,
+        );
+        return true;
+      },
+      "should throw for status='invalid'",
+    );
+  });
+
+  test("succeeds for each valid status value", async () => {
+    const task = createTask({ title: "Tool-status-test" });
+    for (const status of ["in_progress", "done", "open"] as const) {
+      const result = await callStatusTool({ task_id: task.id, status });
+      assert.equal(result.isError, undefined, `should succeed for status=${status}`);
+      const parsed = JSON.parse(result.content[0]!.text) as { status: string };
+      assert.equal(parsed.status, status);
+    }
+  });
+
+  test("returns isError:true for a nonexistent task id", async () => {
+    const result = await callStatusTool({
+      task_id: "nonexistent-tool-status-xyz",
+      status:  "done",
+    });
+    assert.equal(result.isError, true);
+    assert.ok(result.content[0]?.text.includes("nonexistent-tool-status-xyz"));
+  });
+
+  test("status change persists after db reopen", () => {
+    const task = createTask({ title: "Persist-status" });
+    updateTaskStatus(task.id, "done");
+    closeDb();
+    const found = getTask(task.id);
+    assert.equal(found?.status, "done", "status should persist after db reopen");
+  });
+});

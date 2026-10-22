@@ -211,4 +211,15 @@ export class McpTaskClient implements TaskClient {
       parseTask,
     )
   }
+
+  updateTaskStatus(taskId: string, status: TaskStatus): Promise<Task> {
+    const normalizedTaskId = taskId.trim()
+    if (!normalizedTaskId) throw new Error('Task id is required.')
+
+    return this.callTaskTool(
+      'update_task_status',
+      { task_id: normalizedTaskId, status },
+      parseTask,
+    )
+  }
 }

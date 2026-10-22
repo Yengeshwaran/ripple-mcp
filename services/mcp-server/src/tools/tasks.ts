@@ -9,7 +9,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { createTask, listTasks, assignTask } from "../db.js";
+import { createTask, listTasks, assignTask, updateTaskStatus } from "../db.js";
 
 // Reusable ISO 8601 deadline validator
 const isoDateString = z
@@ -169,6 +169,59 @@ Returns a tool-level error if the task does not exist or inputs are invalid.`,
             {
               type: "text" as const,
               text: `Error assigning task: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ── update_task_status ──────────────────────────────────────────────────────
+
+  mcp.tool(
+    "update_task_status",
+    `Update the status of an existing task to open, in_progress, or done.
+Returns the updated task on success.
+Returns a tool-level error if the task does not exist or the status value is invalid.`,
+    {
+      task_id: z
+        .string()
+        .trim()
+        .min(1, "task_id must not be empty")
+        .describe("The id of the task to update (required)"),
+      status: z
+        .enum(["open", "in_progress", "done"])
+        .describe("New status value: open | in_progress | done (required)"),
+    },
+    async ({ task_id, status }) => {
+      try {
+        const updated = updateTaskStatus(task_id, status);
+        if (!updated) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Task not found: no task with id "${task_id}" exists.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(updated, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error updating task status: ${err instanceof Error ? err.message : String(err)}`,
             },
           ],
           isError: true,

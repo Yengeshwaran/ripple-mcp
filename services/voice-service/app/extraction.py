@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import ValidationError
@@ -46,10 +49,35 @@ Rules:
 Return JSON that matches the provided schema."""
 
 
-def _transcript_payload(segments: list[Segment], meeting_date: str | None, timezone: str | None) -> str:
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+CALENDAR_DAYS = 14
+
+
+def _date_context(meeting_date: str | None, timezone: str | None) -> list[str]:
+    """Spell out weekdays and dates so the model does not have to do calendar arithmetic."""
+    if not (meeting_date and timezone):
+        return [f"Meeting date: {meeting_date or 'unknown'}", f"Timezone: {timezone or 'unknown'}"]
+    day = date.fromisoformat(meeting_date)
+    zone = ZoneInfo(timezone)
+
+    def offset(d: date) -> str:
+        raw = datetime(d.year, d.month, d.day, 12, tzinfo=zone).strftime("%z")
+        return f"UTC{raw[:3]}:{raw[3:]}"
+
     lines = [
-        f"Meeting date: {meeting_date or 'unknown'}",
-        f"Timezone: {timezone or 'unknown'}",
+        f"Meeting date: {WEEKDAYS[day.weekday()].title()} {day.isoformat()} ({offset(day)})",
+        f"Timezone: {timezone}",
+        f"Calendar for the next {CALENDAR_DAYS} days. Use it to resolve weekday names ('Thursday' means the next",
+        "Thursday after the meeting date) and use the offset shown for that day in deadline_iso:",
+    ]
+    for i in range(1, CALENDAR_DAYS + 1):
+        d = day + timedelta(days=i)
+        lines.append(f"  {WEEKDAYS[d.weekday()].title()} {d.isoformat()} ({offset(d)})" + ("  tomorrow" if i == 1 else ""))
+    return lines
+
+
+def _transcript_payload(segments: list[Segment], meeting_date: str | None, timezone: str | None) -> str:
+    lines = _date_context(meeting_date, timezone) + [
         "",
         "Transcript (one segment per line: id | speaker | start_ms-end_ms | text):",
     ]
@@ -98,7 +126,7 @@ async def extract_candidates(
         except (ValueError, ValidationError):
             log.warning("extraction output malformed (attempt %d/%d)", attempt, MAX_ATTEMPTS)
             continue
-        return sanitize(raw, speakers, segments, can_resolve_dates=bool(meeting_date and timezone))
+        return sanitize(raw, speakers, segments, meeting_date=meeting_date, timezone=timezone)
     raise errors.invalid_extraction()
 
 
@@ -126,14 +154,16 @@ def sanitize(
     raw: RawExtraction,
     speakers: list[Speaker],
     segments: list[Segment],
-    can_resolve_dates: bool,
+    meeting_date: str | None = None,
+    timezone: str | None = None,
 ) -> list[CandidateTask]:
     """Apply the contract rules regardless of what the model returned.
 
     - evidence must point at real segments; a candidate with no valid evidence is dropped
     - owner must be a known speaker label, else null
     - deadline_iso only with a timezone offset, only when spoken deadline text exists,
-      and only when the request supplied meeting date + timezone; else null
+      only when the request supplied meeting date + timezone, and only if it passes the
+      calendar checks in deadline_is_consistent(); else null
     - needs_review is always true; confidence is not set (LLM self-scores are not calibrated)
     - ids are assigned here, in order
     """
@@ -149,7 +179,7 @@ def sanitize(
             continue
         deadline_text = (cand.deadline_text or "").strip() or None
         deadline_iso = (cand.deadline_iso or "").strip() or None
-        if not (can_resolve_dates and deadline_text and deadline_iso and is_iso_with_offset(deadline_iso)):
+        if not deadline_is_consistent(deadline_text, deadline_iso, meeting_date, timezone):
             deadline_iso = None
         owner = cand.owner_speaker_id if cand.owner_speaker_id in speaker_ids else None
         description = (cand.description or "").strip() or None
@@ -168,3 +198,41 @@ def sanitize(
     if dropped:
         log.info("dropped %d candidate(s) without valid evidence", dropped)
     return out
+
+
+def deadline_is_consistent(
+    deadline_text: str | None, deadline_iso: str | None, meeting_date: str | None, timezone: str | None
+) -> bool:
+    """Server-side checks on a model-resolved deadline. Any doubt -> False (the caller sets null).
+
+    - needs spoken deadline text, a meeting date and a timezone
+    - ISO 8601 with an offset that matches the meeting timezone at that moment
+    - not before the meeting date, and within a year of it
+    - a weekday named in the spoken text must match the resolved date's weekday
+    - "today"/"tonight" must resolve to the meeting date, "tomorrow" to the next day
+    """
+    if not (deadline_text and deadline_iso and meeting_date and timezone):
+        return False
+    if not is_iso_with_offset(deadline_iso):
+        return False
+    try:
+        parsed = datetime.fromisoformat(deadline_iso.replace("Z", "+00:00"))
+        zone = ZoneInfo(timezone)
+        meeting = date.fromisoformat(meeting_date)
+    except (ValueError, KeyError):
+        return False
+    local = parsed.astimezone(zone)
+    if parsed.utcoffset() != local.utcoffset():
+        return False  # offset does not belong to the meeting timezone
+    resolved = local.date()
+    if resolved < meeting or resolved > meeting + timedelta(days=366):
+        return False
+    text = deadline_text.lower()
+    named = [i for i, name in enumerate(WEEKDAYS) if re.search(rf"\b{name}\b", text)]
+    if len(named) > 1 or (named and resolved.weekday() != named[0]):
+        return False
+    if re.search(r"\b(today|tonight)\b", text) and resolved != meeting:
+        return False
+    if re.search(r"\btomorrow\b", text) and resolved != meeting + timedelta(days=1):
+        return False
+    return True

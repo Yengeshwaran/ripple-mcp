@@ -54,6 +54,10 @@ Rules the service enforces on every response, whatever the model returns:
 - `owner_speaker_id` is `null` unless it is a real speaker label the model tied to explicit evidence.
 - `deadline_iso` is `null` unless there is spoken `deadline_text`, the request gave `meeting_date` + `timezone`,
   and the value is ISO 8601 with a timezone offset.
+  The server also re-checks the model's date: it must use the meeting timezone's offset, not be before the
+  meeting or more than a year after it, match any weekday named in the spoken text ("Thursday" must be a
+  Thursday), and "today"/"tonight"/"tomorrow" must land on the right day. Otherwise `deadline_iso` is `null`.
+  The prompt gives the model a 14-day calendar with weekdays and UTC offsets so it doesn't have to work dates out.
 - Every `evidence_segment_ids` entry exists in `segments`; candidates without valid evidence are dropped.
 - `confidence` is not returned (LLM self-scores are not calibrated; the UI should use `needs_review` + evidence).
 - `segments[].speaker_id` can be `null` if the provider gives no speaker for a turn.

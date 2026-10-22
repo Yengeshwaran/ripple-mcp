@@ -201,3 +201,68 @@ def test_default_limits_from_environment(monkeypatch):
     s = get_settings()
     assert s.max_upload_bytes == 25 * 1024 * 1024
     assert s.max_audio_seconds == 180
+
+
+# ---------------------------------------------------------------- 4. deadline dates (found in live clip 3, 21 Oct)
+
+from app.extraction import _transcript_payload, deadline_is_consistent  # noqa: E402
+from app.schemas import Segment  # noqa: E402
+
+CHI = "America/Chicago"
+WED = "2026-10-21"  # meeting date of the live test (a Wednesday)
+
+
+def test_live_clip3_wrong_thursday_is_nulled_through_the_api(client, providers):
+    # Replays the live result: model resolved "Thursday at 5 PM" to Tuesday 2026-10-20.
+    providers.extraction_replies = [httpx.Response(200, json=openrouter_reply({"candidate_tasks": [
+        {"title": "Prepare demo slides", "description": None, "owner_speaker_id": "SPEAKER_01",
+         "deadline_text": "Thursday at 5 PM", "deadline_iso": "2026-10-20T17:00:00-05:00", "evidence_segment_ids": ["seg_001"]},
+        {"title": "Update README", "description": None, "owner_speaker_id": "SPEAKER_02",
+         "deadline_text": "Thursday at noon", "deadline_iso": "2026-10-22T12:00:00-05:00", "evidence_segment_ids": ["seg_002"]},
+    ]}))]
+    resp = client.post(URL, files={"file": ("a.wav", wav_bytes(1))}, data={"meeting_date": WED, "timezone": CHI})
+    assert resp.status_code == 200
+    first, second = resp.json()["candidate_tasks"]
+    assert first["deadline_iso"] is None and first["deadline_text"] == "Thursday at 5 PM"  # wrong date removed
+    assert second["deadline_iso"] == "2026-10-22T12:00:00-05:00"  # correct date kept
+
+
+@pytest.mark.parametrize(
+    "text, iso, expected",
+    [
+        ("Thursday at 5 PM", "2026-10-22T17:00:00-05:00", True),
+        ("by Thursday at noon", "2026-10-22T12:00:00-05:00", True),
+        ("Thursday at 5 PM", "2026-10-20T17:00:00-05:00", False),  # the live bug: wrong weekday
+        ("Thursday at 5 PM", "2026-10-29T17:00:00-05:00", True),  # a later Thursday is still a Thursday
+        ("Friday", "2026-10-22T17:00:00-05:00", False),  # weekday mismatch
+        ("tomorrow", "2026-10-22T09:00:00-05:00", True),
+        ("tomorrow", "2026-10-23T09:00:00-05:00", False),
+        ("tonight", "2026-10-21T20:00:00-05:00", True),
+        ("tonight", "2026-10-22T20:00:00-05:00", False),
+        ("by 5 PM on October 22nd", "2026-10-22T17:00:00-06:00", False),  # wrong offset for Chicago in October
+        ("by 5 PM on October 22nd", "2026-10-22T22:00:00Z", False),  # must use the meeting timezone offset
+        ("by October 1st", "2026-10-01T17:00:00-05:00", False),  # before the meeting
+        ("next year", "2028-01-01T00:00:00-06:00", False),  # more than a year out
+        ("Monday or Tuesday", "2026-10-26T17:00:00-05:00", False),  # two weekdays named: ambiguous
+        ("Monday, November 2nd", "2026-11-02T17:00:00-06:00", True),  # after DST ends
+        ("Monday, November 2nd", "2026-11-02T17:00:00-05:00", False),  # stale summer offset
+    ],
+    ids=lambda v: v if isinstance(v, str) else str(v),
+)
+def test_deadline_calendar_checks(text, iso, expected):
+    assert deadline_is_consistent(text, iso, WED, CHI) is expected
+
+
+def test_deadline_needs_meeting_context():
+    assert deadline_is_consistent("Thursday", "2026-10-22T17:00:00-05:00", None, CHI) is False
+    assert deadline_is_consistent("Thursday", "2026-10-22T17:00:00-05:00", WED, None) is False
+    assert deadline_is_consistent(None, "2026-10-22T17:00:00-05:00", WED, CHI) is False
+
+
+def test_prompt_spells_out_the_calendar():
+    payload = _transcript_payload([Segment(id="seg_001", start_ms=0, end_ms=1, speaker_id=None, text="hi")], WED, CHI)
+    assert "Meeting date: Wednesday 2026-10-21 (UTC-05:00)" in payload
+    assert "Thursday 2026-10-22 (UTC-05:00)  tomorrow" in payload
+    assert "Sunday 2026-11-01 (UTC-06:00)" in payload  # daylight saving ends
+    no_context = _transcript_payload([Segment(id="seg_001", start_ms=0, end_ms=1, speaker_id=None, text="hi")], None, None)
+    assert "Meeting date: unknown" in no_context and "Calendar" not in no_context

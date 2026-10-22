@@ -310,22 +310,85 @@ describe("update_task_status (db layer)", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("update_task_status (MCP tool layer)", () => {
-  async function callStatusTool(
-    args: Record<string, unknown>,
-  ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
+  // Helper: build a server + registry once, reuse across tests in this suite.
+  // Returns { callHandler, validateInput } so tests can choose the right boundary.
+  async function buildStatusServer() {
     const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
     const { registerTaskTools } = await import(
       "../services/mcp-server/src/tools/tasks.js"
     );
     const mcp = new McpServer({ name: "test-status", version: "0.0.0" }, {});
     registerTaskTools(mcp);
+
+    type RegistryEntry = {
+      handler:     (a: Record<string, unknown>) => Promise<unknown>;
+      inputSchema: unknown;
+    };
     const registry = (mcp as unknown as {
-      _registeredTools: Record<string, { handler: (a: Record<string, unknown>) => Promise<unknown> }>;
+      _registeredTools: Record<string, RegistryEntry>;
     })._registeredTools;
+
     const entry = registry["update_task_status"];
     if (!entry) throw new Error("Tool 'update_task_status' not registered");
-    return entry.handler(args) as Promise<{ content: { type: string; text: string }[]; isError?: boolean }>;
+
+    return {
+      /** Call the handler directly — Zod has already run (or is deliberately skipped). */
+      callHandler: (args: Record<string, unknown>) =>
+        entry.handler(args) as Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+
+      /** Run only Zod validation via the SDK's public validateToolInput method.
+       *  Throws McpError(InvalidParams) on failure; returns parsed data on success. */
+      validateInput: (args: Record<string, unknown>) =>
+        (mcp as unknown as {
+          validateToolInput(
+            tool:     RegistryEntry,
+            args:     Record<string, unknown>,
+            toolName: string,
+          ): Promise<Record<string, unknown> | undefined>;
+        }).validateToolInput(entry, args, "update_task_status"),
+    };
   }
+
+  async function callStatusTool(
+    args: Record<string, unknown>,
+  ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
+    const { callHandler } = await buildStatusServer();
+    return callHandler(args);
+  }
+
+  // ── Zod schema boundary ─────────────────────────────────────────────────────
+
+  test("rejects 'completed' as an invalid status at the MCP input-schema boundary", async () => {
+    const { validateInput } = await buildStatusServer();
+    await assert.rejects(
+      () => validateInput({ task_id: "any-id", status: "completed" }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "should throw an Error");
+        assert.ok(
+          err.message.includes("Input validation error") || err.message.includes("invalid_value"),
+          `error message should mention validation failure, got: ${err.message}`,
+        );
+        return true;
+      },
+      "should throw for status='completed'",
+    );
+  });
+
+  test("rejects 'invalid' as an invalid status at the MCP input-schema boundary", async () => {
+    const { validateInput } = await buildStatusServer();
+    await assert.rejects(
+      () => validateInput({ task_id: "any-id", status: "invalid" }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "should throw an Error");
+        assert.ok(
+          err.message.includes("Input validation error") || err.message.includes("invalid_value"),
+          `error message should mention validation failure, got: ${err.message}`,
+        );
+        return true;
+      },
+      "should throw for status='invalid'",
+    );
+  });
 
   test("succeeds for each valid status value", async () => {
     const task = createTask({ title: "Tool-status-test" });

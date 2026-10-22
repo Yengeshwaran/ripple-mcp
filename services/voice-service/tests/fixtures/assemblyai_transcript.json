@@ -1,0 +1,11 @@
+{
+  "id": "synthetic-test-not-real-audio",
+  "status": "completed",
+  "text": "Okay, quick sync. We need to prepare the demo by Friday. I'll finish the dashboard filters by 5 PM Central on October 21st. Great. I'll write the README setup section. Maybe we could add dark mode? Not sure yet.",
+  "utterances": [
+    {"speaker": "A", "start": 0, "end": 3900, "confidence": 0.97, "text": "Okay, quick sync. We need to prepare the demo by Friday.", "words": []},
+    {"speaker": "B", "start": 4200, "end": 9100, "confidence": 0.95, "text": "I'll finish the dashboard filters by 5 PM Central on October 21st.", "words": []},
+    {"speaker": "A", "start": 9400, "end": 12800, "confidence": 0.98, "text": "Great. I'll write the README setup section.", "words": []},
+    {"speaker": "B", "start": 13100, "end": 16400, "confidence": 0.93, "text": "Maybe we could add dark mode? Not sure yet.", "words": []}
+  ]
+}

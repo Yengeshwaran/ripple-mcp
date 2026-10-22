@@ -2188,6 +2188,23 @@ button {
   border-radius: 50%;
   color: #fff;
   font-size: 9px;
+  /* button reset */
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  line-height: 1;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.task-check:hover:not(:disabled) {
+  opacity: 0.75;
+  transform: scale(1.12);
+}
+
+.task-check:disabled,
+.task-check--loading {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .task-check--in_progress {

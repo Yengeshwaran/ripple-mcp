@@ -166,3 +166,17 @@ export function assignTask(taskId: string, assignee: string): Task | null {
 
   return getTask(taskId);
 }
+
+export function updateTaskStatus(taskId: string, status: TaskStatus): Task | null {
+  const db  = getDb();
+  const now = new Date().toISOString();
+
+  const stmt = db.prepare(
+    "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
+  );
+  const result = stmt.run(status, now, taskId) as { changes: number };
+
+  if (result.changes === 0) return null;
+
+  return getTask(taskId);
+}

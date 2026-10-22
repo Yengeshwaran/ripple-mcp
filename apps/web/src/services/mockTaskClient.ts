@@ -1,4 +1,4 @@
-import type { CreateTaskInput, Task, TaskClient, TaskFilters } from './taskClient'
+import type { CreateTaskInput, Task, TaskClient, TaskFilters, TaskStatus } from './taskClient'
 
 // Keep demo tasks in the mock adapter so the UI has no direct dependency on fixtures.
 const sampleTasks: Task[] = [
@@ -88,5 +88,23 @@ export class MockTaskClient implements TaskClient {
     )
 
     return copyTask(assignedTask)
+  }
+
+  async updateTaskStatus(taskId: string, status: TaskStatus): Promise<Task> {
+    const taskIndex = this.tasks.findIndex((task) => task.id === taskId)
+    if (taskIndex === -1) {
+      throw new Error(`Task not found: ${taskId}`)
+    }
+
+    const updatedTask: Task = {
+      ...this.tasks[taskIndex],
+      status,
+      updatedAt: new Date().toISOString(),
+    }
+    this.tasks = this.tasks.map((task, index) =>
+      index === taskIndex ? updatedTask : task,
+    )
+
+    return copyTask(updatedTask)
   }
 }

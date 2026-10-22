@@ -271,3 +271,86 @@ describe("ping tool smoke test", () => {
     assert.ok(mcp, "McpServer instance created successfully with ping tool");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// updateTaskStatus is exported from db.ts — import it the same way as the others
+const { updateTaskStatus } = await import("../services/mcp-server/src/db.js");
+
+describe("update_task_status (db layer)", () => {
+  test("sets status to done", () => {
+    const task    = createTask({ title: "Status-test done" });
+    const updated = updateTaskStatus(task.id, "done");
+
+    assert.ok(updated,                              "should return updated task");
+    assert.equal(updated!.status,   "done");
+    assert.equal(updated!.id,       task.id);
+    assert.ok(updated!.updatedAt >= task.updatedAt, "updatedAt should advance");
+  });
+
+  test("sets status to in_progress", () => {
+    const task    = createTask({ title: "Status-test in_progress" });
+    const updated = updateTaskStatus(task.id, "in_progress");
+    assert.equal(updated!.status, "in_progress");
+  });
+
+  test("reopens a done task by setting status back to open", () => {
+    const task     = createTask({ title: "Status-test reopen" });
+    updateTaskStatus(task.id, "done");
+    const reopened = updateTaskStatus(task.id, "open");
+    assert.equal(reopened!.status, "open");
+  });
+
+  test("returns null for a nonexistent task id", () => {
+    const result = updateTaskStatus("nonexistent-status-000", "done");
+    assert.equal(result, null);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("update_task_status (MCP tool layer)", () => {
+  async function callStatusTool(
+    args: Record<string, unknown>,
+  ): Promise<{ content: { type: string; text: string }[]; isError?: boolean }> {
+    const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
+    const { registerTaskTools } = await import(
+      "../services/mcp-server/src/tools/tasks.js"
+    );
+    const mcp = new McpServer({ name: "test-status", version: "0.0.0" }, {});
+    registerTaskTools(mcp);
+    const registry = (mcp as unknown as {
+      _registeredTools: Record<string, { handler: (a: Record<string, unknown>) => Promise<unknown> }>;
+    })._registeredTools;
+    const entry = registry["update_task_status"];
+    if (!entry) throw new Error("Tool 'update_task_status' not registered");
+    return entry.handler(args) as Promise<{ content: { type: string; text: string }[]; isError?: boolean }>;
+  }
+
+  test("succeeds for each valid status value", async () => {
+    const task = createTask({ title: "Tool-status-test" });
+    for (const status of ["in_progress", "done", "open"] as const) {
+      const result = await callStatusTool({ task_id: task.id, status });
+      assert.equal(result.isError, undefined, `should succeed for status=${status}`);
+      const parsed = JSON.parse(result.content[0]!.text) as { status: string };
+      assert.equal(parsed.status, status);
+    }
+  });
+
+  test("returns isError:true for a nonexistent task id", async () => {
+    const result = await callStatusTool({
+      task_id: "nonexistent-tool-status-xyz",
+      status:  "done",
+    });
+    assert.equal(result.isError, true);
+    assert.ok(result.content[0]?.text.includes("nonexistent-tool-status-xyz"));
+  });
+
+  test("status change persists after db reopen", () => {
+    const task = createTask({ title: "Persist-status" });
+    updateTaskStatus(task.id, "done");
+    closeDb();
+    const found = getTask(task.id);
+    assert.equal(found?.status, "done", "status should persist after db reopen");
+  });
+});

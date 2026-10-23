@@ -11,11 +11,73 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createTask, listTasks, assignTask, updateTaskStatus } from "../db.js";
 
-// Reusable ISO 8601 deadline validator
+// ── Strict ISO 8601 date-time validator ───────────────────────────────────────
+//
+// Requires:  YYYY-MM-DDTHH:MM:SS[.sss](Z | ±HH:MM)
+// Rejects:   date-only ("2025-10-26"), no timezone, bad months/days/times,
+//            impossible calendar dates ("2026-02-30"), bad offsets (±25:00).
+//
+// After validation the value is NORMALIZED to UTC ISO format before storage so
+// every stored deadline is canonical regardless of the input timezone.
+
+const ISO_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+/** Returns true only when year/month/day/hour/min/sec are all in range AND the
+ *  calendar date is real (e.g. rejects Feb 30 and Apr 31). */
+function isStrictIsoDatetime(v: string): boolean {
+  const m = ISO_DATETIME_RE.exec(v);
+  if (!m) return false;
+
+  const year  = parseInt(m[1]!, 10);
+  const month = parseInt(m[2]!, 10);
+  const day   = parseInt(m[3]!, 10);
+  const hour  = parseInt(m[4]!, 10);
+  const min   = parseInt(m[5]!, 10);
+  const sec   = parseInt(m[6]!, 10);
+
+  // Basic field ranges
+  if (month < 1 || month > 12) return false;
+  if (day   < 1 || day   > 31) return false;
+  if (hour  > 23)              return false;
+  if (min   > 59)              return false;
+  if (sec   > 59)              return false;
+
+  // Timezone offset range: ±23:59 (UTC offsets in practice are ≤ ±14:00 but
+  // we allow ±23:59 to be liberal while still blocking ±25:00 etc.)
+  if (m[7] !== "Z") {
+    const offH = parseInt(m[9]!,  10);
+    const offM = parseInt(m[10]!, 10);
+    if (offH > 23 || offM > 59) return false;
+  }
+
+  // Verify the calendar date is real: Date.UTC normalises impossible dates
+  // (e.g. Feb 30 becomes Mar 1 or 2), so we compare day back.
+  const utcMs = Date.UTC(year, month - 1, day);
+  const check = new Date(utcMs);
+  if (
+    check.getUTCFullYear() !== year  ||
+    check.getUTCMonth()    !== month - 1 ||
+    check.getUTCDate()     !== day
+  ) {
+    return false; // impossible calendar date
+  }
+
+  return true;
+}
+
+/** Normalize an already-validated ISO datetime string to UTC ("…Z") format. */
+export function normalizeToUtc(v: string): string {
+  return new Date(v).toISOString();
+}
+
 const isoDateString = z
   .string()
-  .refine((v) => !isNaN(Date.parse(v)), {
-    message: "deadline must be a valid ISO 8601 date/time string",
+  .refine(isStrictIsoDatetime, {
+    message:
+      "deadline must be a valid ISO 8601 date-time with an explicit timezone " +
+      'and a real calendar date, e.g. "2025-12-31T17:00:00Z" or ' +
+      '"2025-12-31T17:00:00+05:30". Date-only values are not accepted.',
   });
 
 // ── create_task ───────────────────────────────────────────────────────────────
@@ -51,7 +113,9 @@ Use this when a user mentions a new action item, deliverable, or to-do.`,
         const input: import("../db.js").CreateTaskInput = { title };
         if (description !== undefined) input.description = description;
         if (assignee    !== undefined) input.assignee    = assignee;
-        if (deadline    !== undefined) input.deadline    = deadline;
+        // Normalize deadline to canonical UTC before persistence so all stored
+        // deadlines are uniform regardless of the input timezone offset.
+        if (deadline    !== undefined) input.deadline    = normalizeToUtc(deadline);
         const task = createTask(input);
         return {
           content: [

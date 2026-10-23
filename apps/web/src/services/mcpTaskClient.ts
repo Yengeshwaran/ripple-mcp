@@ -56,9 +56,17 @@ function parseTask(value: unknown): Task {
     throw new Error(`MCP task response has an unknown status: ${status}`)
   }
 
+  // Lenient deadline handling: an existing record may hold a legacy date-only
+  // string (e.g. "2025-10-26").  Accept it as-is so one bad record does not
+  // crash the whole task list.  Log a warning so the issue is visible in
+  // DevTools without breaking the UI.
   const deadline = optionalString(value, 'deadline')
   if (deadline !== undefined && !isIsoDateTime(deadline)) {
-    throw new Error('MCP task response has an invalid ISO date/time in "deadline".')
+    console.warn(
+      `[McpTaskClient] Task "${requiredString(value, 'id')}" has a non-standard deadline ` +
+      `"${deadline}". It will be displayed as-is. ` +
+      'New tasks require a full ISO date-time with timezone.',
+    )
   }
 
   const description = optionalString(value, 'description')
@@ -176,11 +184,14 @@ export class McpTaskClient implements TaskClient {
     if (input.description?.trim()) args.description = input.description.trim()
     if (input.assignee?.trim()) args.assignee = input.assignee.trim()
     if (input.deadline !== undefined) {
-      const timestamp = Date.parse(input.deadline)
-      if (!Number.isFinite(timestamp)) {
-        throw new Error('Deadline must be a valid ISO date/time.')
+      if (!isIsoDateTime(input.deadline)) {
+        throw new Error(
+          'Deadline must be a full ISO date-time with an explicit timezone, ' +
+          'e.g. "2025-12-31T17:00:00Z". Date-only values are not accepted.',
+        )
       }
-      args.deadline = new Date(timestamp).toISOString()
+      // Pass the validated string as-is; the MCP server normalizes it to UTC.
+      args.deadline = input.deadline
     }
 
     return this.callTaskTool('create_task', args, parseTask)

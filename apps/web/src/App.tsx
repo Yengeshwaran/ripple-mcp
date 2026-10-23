@@ -9,14 +9,39 @@ import type { CreateTaskInput, Task, TaskClient, TaskStatus, TaskToolCall } from
 const useMockTaskClient = import.meta.env.VITE_USE_MOCK_TASK_CLIENT === 'true'
 type TaskFilter = 'all' | TaskStatus
 
+// Date-only pattern: "YYYY-MM-DD" with no time or timezone component.
+// Legacy records may have this format; we render it without parsing through
+// Date so the calendar day is never shifted by the user's local timezone.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
 function formatDeadline(deadline: string): string {
+  // Legacy date-only (e.g. "2025-10-26"): format as a plain date, no timezone
+  // conversion, so "Oct 26" is always "Oct 26" regardless of locale.
+  if (DATE_ONLY_RE.test(deadline)) {
+    const [year, month, day] = deadline.split('-').map(Number)
+    if (year && month && day) {
+      return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(Date.UTC(year, month - 1, day)))
+    }
+  }
+
+  // Full ISO datetime: parse and format with time.
+  const ts = Date.parse(deadline)
+  if (!Number.isFinite(ts)) {
+    // Malformed value: show the raw string rather than throwing or hiding it.
+    return deadline
+  }
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-  }).format(new Date(deadline))
+  }).format(new Date(ts))
 }
 
 function formatActivityTime(value: string): string {
@@ -458,8 +483,17 @@ function App() {
         ? 'Commitment created, but the list could not be refreshed. Use Refresh to try again.'
         : 'Commitment created.')
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : 'Could not create commitment.')
-      setConnectionStatus(useMockTaskClient ? 'Mock mode' : 'Unavailable')
+      const message = error instanceof Error ? error.message : 'Could not create commitment.'
+      setCreateError(message)
+      // Only mark the connection as unavailable for a transport/server error,
+      // not for a local input-validation error (e.g. bad deadline format).
+      const isValidationError =
+        message.includes('required') ||
+        message.includes('Deadline must be') ||
+        message.includes('ISO date')
+      if (!isValidationError) {
+        setConnectionStatus(useMockTaskClient ? 'Mock mode' : 'Unavailable')
+      }
     } finally {
       setIsCreating(false)
     }
